@@ -1,8 +1,8 @@
-# 給 engineering-workflow-core 的 Issue 草稿
+# 給 engineering-workflow-core 的 Issue（繁體中文版）
 
-狀態：草稿 · 2026-11-10 · 尚未提交
+狀態：已於 2026-11-10 提交為 [engineering-workflow-core#39](https://github.com/jeffery777/engineering-workflow-core/issues/39)
 
-本檔是要提交到 [engineering-workflow-core](https://github.com/jeffery777/engineering-workflow-core) 的 Issue 內容。提交時複製「Issue 內容」一節。這個 Issue 只作記錄與討論，不要求立即修改 Core。
+本檔是該 Issue 的繁體中文版本，留作紀錄。提交的版本是英文，依上游近期 Issue 的慣例撰寫，並引用相關的 #38。兩個版本的問題相同。這個 Issue 只作記錄與討論，不要求立即修改 Core。
 
 依據：Core v0.5.0 的 [review-and-security 契約](https://github.com/jeffery777/engineering-workflow-core/blob/main/contracts/review-and-security.md)；agent-council 規格 v0.4 的 D-22 與第 13 節「外部相依」。
 

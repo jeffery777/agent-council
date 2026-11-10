@@ -23,7 +23,7 @@ Claude and Codex connect only as MCP clients. Vendor-specific behavior stays in 
 | --- | --- |
 | [Requirements and architecture specification v0.4](docs/specs/requirements-and-architecture.zh-TW.md) | Traditional Chinese |
 | [M1 dual-CLI PoC plan](docs/plans/poc-plan-m1.zh-TW.md) | Traditional Chinese |
-| [Draft of the issue for engineering-workflow-core](docs/upstream/engineering-workflow-core-issue-draft.zh-TW.md) | Traditional Chinese |
+| [Issue for engineering-workflow-core, Traditional Chinese version](docs/upstream/engineering-workflow-core-issue-draft.zh-TW.md) | Traditional Chinese |
 
 ## License
 
