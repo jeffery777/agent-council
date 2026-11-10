@@ -1,10 +1,10 @@
-# Agent Council：Claude × Codex 協作通訊層 需求與架構規格 v0.4
+# Agent Council：Claude × Codex 協作通訊層 需求與架構規格 v0.5
 
-狀態：v0.4 草案 · 2026-11-10
+狀態：v0.5 草案 · 2026-11-10
 
 ## 1. 文件資訊
 
-Agent Council 讓 Claude 與 Codex 針對特定專案進行結構化討論，由獨立仲裁者質詢，最後由流程控制器向人提出結論與建議。本文件為 v0.4 草案，定義需求、協定、架構與開發計畫，待審閱。
+Agent Council 讓 Claude 與 Codex 針對特定專案進行結構化討論，由獨立仲裁者質詢，最後由流程控制器向人提出結論與建議。本文件為 v0.5 草案，定義需求、協定、架構與開發計畫，待審閱。
 
 - 範圍：需求、討論協定、系統架構、人的介面、開發計畫。API schema 與資料模型另立文件。
 - 用詞規範：中文參考 ASD-STE100：一句一事、主動語態、一詞一義。英文規格文件必須遵守 ASD-STE100。
@@ -16,6 +16,7 @@ Agent Council 讓 Claude 與 Codex 針對特定專案進行結構化討論，由
 | v0.2 | 2026-11-10 | 新增 A2A 的採用範圍（D-16、D-17）、thread 單一擁有者（D-18）、NFR-09、NFR-10、匿名化的時點、P2 A2A gateway、可移轉擁有權的預留設計、PoC-12、R-06、相關未決問題 |
 | v0.3 | 2026-11-10 | 修正文內不一致（API 備援、偵測時機、人的介入、mTLS、Rust SDK）；新增 D-19、D-20、FR-22 至 FR-30、端點能力矩陣、仲裁者啟動限制、PoC-13、PoC-14、R-07；修訂 D-17、NFR-01、NFR-02、NFR-04、NFR-05、NFR-09 與 A2A 對應表 |
 | v0.4 | 2026-11-10 | 範圍：新增工作交付流程與研究型 Council（D-21 至 D-24、FR-31 至 FR-39）；角色改為可設定。順序：先打通雙 CLI，再定稿 v1.0；先交付工作交付（merge 前審查），再交付 Council。新增 PoC 規則、PoC-15、R-09、外部相依。修訂 D-11 的交付時程、D-18 的 P1 範圍、FR-14 的任務欄位 |
+| v0.5 | 2026-11-10 | 新增 D-25：本系統統一工作交付的協定，不統一各 agent 的執行能力。限定 adapter 的三項職責 |
 
 | 術語 | 定義 |
 | --- | --- |
@@ -25,7 +26,7 @@ Agent Council 讓 Claude 與 Codex 針對特定專案進行結構化討論，由
 | 流程控制器（Flow Controller） | daemon 內控制流程、回合、上限與交付的確定性程式。它不同於 Claude 或 Codex session 內負責調度 subagent 的主 agent |
 | 協調者（Orchestrator） | 一家 harness 內調度 subagent 的主 agent。協調者屬於參與的一方；它不是流程控制器，也不可擔任仲裁者 |
 | 端點（Endpoint） | 一個 agent 介面：Claude Desktop、Claude Code CLI、Codex Desktop、Codex CLI |
-| Adapter | 把廠商介面轉換為本系統協定的防腐層 |
+| Adapter | 把廠商介面轉換為本系統協定的防腐層。它只負責通知或啟動、確認已開始、帶回結果（D-25） |
 | Broker | 保存 thread、訊息、決策的本機常駐服務 |
 | 立場書（Position） | 參與者的方案、受阻與限制、建議解法與證據 |
 | ADR | Architecture Decision Record，簽核後的決策紀錄 |
@@ -56,7 +57,7 @@ Agent Council 讓 Claude 與 Codex 針對特定專案進行結構化討論，由
 
 ## 3. 決策清單
 
-D-01 至 D-08、D-11、D-12、D-15 已於 2026-11-06 的討論中確認；D-09、D-10、D-13、D-14 為提議，待確認。D-16、D-17 於 2026-11-10 提出，待確認。D-18 至 D-24 已於 2026-11-10 的討論中確認。同日修訂 D-11 的交付時程與 D-18 的 P1 範圍。
+D-01 至 D-08、D-11、D-12、D-15 已於 2026-11-06 的討論中確認；D-09、D-10、D-13、D-14 為提議，待確認。D-16、D-17 於 2026-11-10 提出，待確認。D-18 至 D-25 已於 2026-11-10 的討論中確認。同日修訂 D-11 的交付時程與 D-18 的 P1 範圍。
 
 | ID | 決策 | 狀態 |
 | --- | --- | --- |
@@ -84,6 +85,7 @@ D-01 至 D-08、D-11、D-12、D-15 已於 2026-11-06 的討論中確認；D-09�
 | D-22 | 本系統只提供工作交付的機制：投遞、角色對應、狀態、結果回傳、紀錄與升級。關卡、審查深度、哪些關卡跨廠商、升級條件由 engineering-workflow-core 定義。各 dev-skills 包在關卡呼叫本系統；本系統不可用時，技能包必須退回同廠商的流程。本系統只處理跨廠商的交接；同一家 harness 內部的調度由該 harness 處理 | 已確認 |
 | D-23 | 交付順序：先交付工作交付，從 merge 前審查開始；再交付 Council；其他關卡（commit、push）最後 | 已確認 |
 | D-24 | 仲裁者必須是獨立的 session，不可由參與的協調者兼任。研究型 Council 也必須有仲裁者。仲裁者做總結並提出建議；人做最終裁決 | 已確認 |
+| D-25 | 本系統統一工作交付的協定，不統一各 agent 的執行能力。協定規定請求、認領與結果的格式，以及結果必須附的證據。工具、沙箱、subagent、模型與審查的做法由各 harness 決定。唯一的例外是仲裁者的啟動：本系統必須控制它，以保證獨立性（D-24） | 已確認 |
 
 ## 4. 範圍與分階段
 
@@ -147,6 +149,8 @@ subagent 模式的獨立性保證低於 headless 模式。雜湊值可以證明�
 | Claude Desktop：Code 分頁 | 與 Claude Code 共用（PoC-01） | 否 | 否 | 預期可用 hooks（PoC-01） | 待驗證 | 半主動 |
 | Codex Desktop | 與 Codex CLI 共用 config.toml | 否 | 否 | 預期可用 hooks（PoC-02） | 待驗證 | 半主動 |
 | Claude Desktop：Chat 分頁 | `claude_desktop_config.json` | 否 | 否 | 否 | 否 | 被動 |
+
+本表只描述工作如何送到一個端點，以及如何確認端點已開始工作。本表不描述端點的執行能力（D-25）。
 
 每個 adapter 的能力契約還必須記錄三項：端點忙碌時的行為（排隊、介入目前回合或不支援）、如何確認工作已開始、如何取消。契約必須註明已驗證的 CLI、桌面版與作業系統版本。
 
@@ -331,6 +335,29 @@ flowchart TB
 ```
 
 廠商改版時，只需修改對應的 adapter；流程控制器、broker 與討論協定不必變更。
+
+**協定與執行的分界（D-25）。**
+
+| 由本系統統一 | 由各 harness 決定 |
+| --- | --- |
+| 工作項目與訊息的格式；請求、認領、結果的狀態 | 使用哪些工具 |
+| 請求必須附的內容：工作快照、所依據的決策 | 沙箱與權限的設定方式 |
+| 結果必須附的內容：發現的格式、證據、實際生效的權限、做不到的事 | 是否使用 subagent；使用哪個模型 |
+| 投遞、去重、暫停與紀錄 | 審查與實作的做法 |
+
+adapter 只有三項職責：
+
+1. 通知端點有工作，或啟動一個新的 session。
+2. 確認端點已開始工作（FR-22）。
+3. 把結果帶回 broker。
+
+adapter 不解讀執行設定。模型、沙箱與工具的設定寫在角色設定檔中，使用各 harness 自己的寫法；adapter 原樣傳遞。
+
+協定在 agent 這一端的行為，由各 harness 的技能包實作（Claude 端的 skill、Codex 端的 plugin）。各 harness 特有的行為只可放在技能包與 adapter。
+
+本系統不保證兩家的執行品質相同。本系統只檢查結果是否符合格式，以及證據是否齊全。品質由 engineering-workflow-core 的規範與各技能包的測試保證。
+
+這項分界與 engineering-workflow-core 的分工一致：契約定義義務；實際的 reviewer、工具與資格由各接口提供。D-25 不要求修改 Core。結果必須附哪些證據，由 Core 定義（見 [engineering-workflow-core#39](https://github.com/jeffery777/engineering-workflow-core/issues/39)）。
 
 MCP 工具初版清單（名稱待 API schema 定稿）：
 
@@ -534,6 +561,7 @@ M2（v1.0 定稿）簽核前必須回答以下問題。
 - [ ] 研究型 thread 寫入 Google Drive 時，NFR-03（資料留在本機）的例外範圍。
 - [ ] 工作項目的結果格式如何對齊 engineering-workflow-core 的 findings 欄位（穩定 ID、disposition、`requirement_relation`）。FR-36 的「偏離」判定應對應到這些欄位，不另立一套分類。
 - [ ] 跨廠商審查會把 diff 送到另一家模型供應商。啟用這條路徑是否需要每個專案的明確決定。
+- [ ] M2 定稿時，依 D-25 與 M1 的 PoC 結果精簡端點能力矩陣與 adapter 的條文。
 - [ ] 實作語言：TypeScript（MCP SDK 成熟、開發快）或 Rust / Go（單一 binary）。A2A 官方 SDK 已包含 Rust（[a2aproject/a2a-rs](https://github.com/a2aproject/a2a-rs)），所以 SDK 不再是選型的限制。選型依維護者的熟悉度、MCP 與程序控制的實作難度、測試效率與部署方式決定。
 - [ ] D-16：P2 的 daemon 之間採 A2A v1.0.x、P1 不實作，是否接受？
 - [ ] D-17：P1 的資料模型必須可對應 A2A，是否接受？
