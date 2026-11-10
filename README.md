@@ -19,7 +19,7 @@ Claude and Codex connect only as MCP clients. Vendor-specific behavior stays in 
 
 | Document | Language |
 | --- | --- |
-| [Requirements and architecture specification v0.2](docs/specs/requirements-and-architecture.zh-TW.md) | Traditional Chinese |
+| [Requirements and architecture specification v0.3](docs/specs/requirements-and-architecture.zh-TW.md) | Traditional Chinese |
 
 ## License
 
