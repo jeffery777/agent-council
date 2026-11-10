@@ -13,6 +13,8 @@ This project is in the specification phase. There is no code yet.
 3. The flow controller gives the result to a human: points of agreement, points of disagreement, options, and a recommendation.
 4. The human approves, rejects, or asks for more information. After approval, the system writes an Architecture Decision Record (ADR).
 
+The system also moves work items between the two agents. For example, one agent writes a change and the other agent does the review and the security scan before the merge. The workflow rules for these gates stay in engineering-workflow-core. agent-council supplies only the transport and the records.
+
 Claude and Codex connect only as MCP clients. Vendor-specific behavior stays in adapters, so a vendor change affects only one adapter.
 
 ## Documents
