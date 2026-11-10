@@ -1,14 +1,19 @@
-# Agent Council：Claude × Codex 協作通訊層 需求與架構規格 v0.1
+# Agent Council：Claude × Codex 協作通訊層 需求與架構規格 v0.2
 
-狀態：v0.1 草案 · 2026-11-06
+狀態：v0.2 草案 · 2026-11-10
 
 ## 1. 文件資訊
 
-Agent Council 讓 Claude 與 Codex 針對特定專案進行結構化討論，由獨立仲裁者質詢，最後由流程控制器向人提出結論與建議。本文件為 v0.1 草案，定義需求、協定、架構與開發計畫，待審閱。
+Agent Council 讓 Claude 與 Codex 針對特定專案進行結構化討論，由獨立仲裁者質詢，最後由流程控制器向人提出結論與建議。本文件為 v0.2 草案，定義需求、協定、架構與開發計畫，待審閱。
 
 - 範圍：需求、討論協定、系統架構、人的介面、開發計畫。API schema 與資料模型另立文件。
 - 用詞規範：中文參考 ASD-STE100：一句一事、主動語態、一詞一義。英文規格文件必須遵守 ASD-STE100。
 - 規範用語：「必須」= MUST，「應」= SHOULD，「可」= MAY。
+
+| 版本 | 日期 | 變更 |
+| --- | --- | --- |
+| v0.1 | 2026-11-06 | 初版：需求、仲裁協定、架構、仲裁者啟動方式、遠端（SSH）部署 |
+| v0.2 | 2026-11-10 | 新增 A2A 的採用範圍（D-16、D-17）、thread 單一擁有者（D-18）、NFR-09、NFR-10、匿名化的時點、P2 A2A gateway、可移轉擁有權的預留設計、PoC-12、R-06、相關未決問題 |
 
 | 術語 | 定義 |
 | --- | --- |
@@ -21,6 +26,9 @@ Agent Council 讓 Claude 與 Codex 針對特定專案進行結構化討論，由
 | Broker | 保存 thread、訊息、決策的本機常駐服務 |
 | 立場書（Position） | 參與者的方案、受阻與限制、建議解法與證據 |
 | ADR | Architecture Decision Record，簽核後的決策紀錄 |
+| A2A | Agent2Agent 協定。由 Linux Foundation 託管的 agent 間開放標準，用於探索、委派任務與交換結果 |
+| Agent Card | A2A agent 公開的描述文件，列出名稱、技能、介面、能力與安全機制 |
+| A2A gateway | daemon 內的元件，在 P2 以 A2A 和其他主機的 daemon 交換資料 |
 
 ## 2. 背景與自行開發的理由
 
@@ -34,7 +42,7 @@ Agent Council 讓 Claude 與 Codex 針對特定專案進行結構化討論，由
 
 ## 3. 決策清單
 
-D-01 至 D-08、D-11、D-12、D-15 已於 2026-11-06 的討論中確認；D-09、D-10、D-13、D-14 為提議，待確認。
+D-01 至 D-08、D-11、D-12、D-15 已於 2026-11-06 的討論中確認；D-09、D-10、D-13、D-14 為提議，待確認。D-16、D-17 於 2026-11-10 提出，待確認。D-18 已於 2026-11-10 的討論中確認。
 
 | ID | 決策 | 狀態 |
 | --- | --- | --- |
@@ -53,6 +61,9 @@ D-01 至 D-08、D-11、D-12、D-15 已於 2026-11-06 的討論中確認；D-09�
 | D-13 | 啟動方式執行失敗時，系統暫停 thread 並通知人，不自動切換；auto_fallback 預設關閉 | 提議 |
 | D-14 | 仲裁者的建議是待評估的提案，不是指令；參與者必須逐條回應 | 提議 |
 | D-15 | 建議的部署方式是桌面版與 CLI 同時安裝 | 已確認 |
+| D-16 | 跨主機（P2）時，daemon 之間以 A2A v1.0.x 的 JSON-RPC binding 通訊。P1 不實作 A2A。Claude 與 Codex 仍只當 MCP client（D-03 不變）；系統不把 CLI 包裝成 A2A server | 提議 |
+| D-17 | P1 的內部資料模型必須可對應 A2A 的 Task、Message、Artifact 與 Task 狀態（對應表見第 9 節），使 P2 不必重構核心 | 提議 |
+| D-18 | P2 時，每個 thread 只有一個擁有者主機，即建立該 thread 的主機。只有擁有者主機的流程控制器可以推進該 thread；其他主機的 daemon 只轉送訊息。資料模型必須預留擁有權移轉所需的欄位（見第 9 節），可移轉擁有權列為後續擴充 | 已確認 |
 
 ## 4. 範圍與分階段
 
@@ -61,7 +72,7 @@ P1 支援 daemon、兩家 CLI 與 repo 在同一台主機的部署；人可從�
 | 階段 | 端點範圍 | 主要新增能力 | 進入條件 |
 | --- | --- | --- | --- |
 | P1 同主機 | Claude Desktop、Claude Code CLI、Codex Desktop、Codex CLI；daemon、CLI 與 repo 在同一台主機，桌面版在本機或以 SSH 連到該主機 | localhost daemon、仲裁流程、Web 看板、紀錄路由 | 本規格簽核，PoC-01 至 PoC-11 完成 |
-| P2 跨主機 | Claude 與 Codex 在不同主機執行 | daemon 之間的聯邦、主機身分驗證（mTLS 或 overlay 網路）、傳輸加密 | P1 驗收通過 |
+| P2 跨主機 | Claude 與 Codex 在不同主機執行 | daemon 之間的聯邦（A2A gateway，D-16）、主機身分驗證（mTLS 或 overlay 網路）、傳輸加密 | P1 驗收通過，PoC-12 完成 |
 | P3 雲端 | Claude Code 雲端 session、Codex cloud | relay、對外驗證、資料外流防護 | P2 驗收通過，完成資安評估 |
 
 不在範圍內：多使用者或團隊共用、行動 App、其他 agent（例如 Grok Build）。其他 agent 可在 P2 之後以新增 adapter 的方式擴充。
@@ -160,6 +171,8 @@ subagent 模式必須符合三項要求：
 | NFR-06 | 可稽核 | 所有訊息必須為 append-only，並記錄時間戳與來源端點。 |
 | NFR-07 | 可測試 | 流程控制器狀態機必須能用模擬 agent 完整測試，不消耗模型用量。 |
 | NFR-08 | 可用性 | Web 看板必須容易理解與操作，採用現代化、具科技感的介面風格。 |
+| NFR-09 | 互通標準（P2） | A2A gateway 必須鎖定已驗證的 A2A 版本範圍（初版 v1.0.x），並記錄在相容性檢查中。每個 A2A 請求必須帶 `A2A-Version` header；沒有此 header 時，伺服器會視為 v0.3 用戶端。gateway 必須驗證對方 Agent Card 的簽章，並以 mTLS 驗證主機身分。A2A 版本變動必須由契約測試偵測（同 NFR-01）。 |
+| NFR-10 | 帳號與憑證 | 系統不可收集、儲存或轉送 Claude 或 Codex 的登入憑證或 session token；CLI 必須使用各自官方流程完成的登入。A2A gateway 只可接受維護者本人的主機；系統不可讓其他人透過 A2A 或其他介面使用維護者的訂閱。 |
 
 ## 8. 仲裁討論協定
 
@@ -198,6 +211,8 @@ CROSS-EXAM 最多跑 N 輪。人選擇「要求補充」時，流程回到質詢
 2. 流程控制器檢查格式，把 A、B 換回角色，再寫入 broker。
 3. 參與者在自己的環境驗證可行性，並逐條回應（FR-17）。仲裁者沒有工具與沙箱，所以可行性必須由參與者驗證。
 4. 下一輪，仲裁者讀到雙方的回應，可修正建議或追問。最終報告列出每條建議的結果（FR-18）。
+
+**匿名化的時點。** 匿名化必須在流程控制器內完成，而且必須在仲裁資料包離開 broker 之前完成。P2 經 A2A 轉交時，A2A 的 message metadata 與 Agent Card 會帶來源身分。流程控制器必須在轉交仲裁者前移除或替換這些欄位，並以替換後的資料包計算雜湊值。
 
 CLI 端點由流程控制器叫醒；桌面版端點的待回應項目出現在收件匣。
 
@@ -267,6 +282,56 @@ auto_fallback = false
 checked_at = "2026-11-06"
 ```
 
+**P2：A2A gateway。** P2 在 daemon 內新增 A2A gateway（D-16）。Claude 與 Codex 仍只連本機 daemon 的 MCP server；只有 daemon 之間使用 A2A。
+
+```mermaid
+flowchart LR
+  subgraph HA["主機 A"]
+    CA["Claude 端點<br/>MCP client"] --> DA["daemon A<br/>MCP server、流程控制器、broker"]
+    DA --- GA["A2A gateway"]
+  end
+  subgraph HB["主機 B"]
+    XB["Codex 端點<br/>MCP client"] --> DB["daemon B<br/>MCP server、broker"]
+    DB --- GB["A2A gateway"]
+  end
+  GA <-->|"A2A v1.0.x · JSON-RPC over HTTPS<br/>mTLS、簽章 Agent Card"| GB
+```
+
+**Thread 的擁有權（D-18）。** 每個 thread 只有一個擁有者主機，即建立該 thread 的主機。只有擁有者主機的流程控制器可以推進狀態、保管密封立場、計算仲裁資料包的雜湊值、記錄簽核。其他主機的 daemon 只轉送訊息。這樣每個 thread 只有一個寫入者，系統不需要跨主機的共識機制，也符合 D-09。
+
+代價：擁有者主機關機或斷線時，該 thread 暫停，直到擁有者主機恢復。人必須在擁有者主機的 Web 看板上簽核。
+
+為了日後加入可移轉擁有權而不重構核心，資料模型必須從 P1 起包含以下設計：
+
+1. 每個 thread 記錄 `owner`，值為主機 ID，不是網路位址。
+2. 每個 thread 有遞增的擁有權世代號 `epoch`。每個狀態變更必須帶目前的 `epoch`；broker 必須拒收舊 `epoch` 的寫入。
+3. 其他主機依 `owner` 路由訊息，不使用固定位址。
+4. 一個 thread 的 append-only 紀錄、雜湊值與密封內容必須可完整匯出，並可在另一台主機匯入後驗證。
+5. `contextId` 與 Task ID 由系統產生，不可包含主機資訊。
+
+**後續擴充：可移轉擁有權（未排程）。** 預定的移轉規則如下，實作前必須另行規格化與審閱：
+
+1. 只有人可以在 Web 看板發起移轉。
+2. 只有沒有進行中回合時可以移轉。
+3. 步驟：舊擁有者凍結 thread → 匯出 → 新擁有者匯入並驗證雜湊值 → `epoch` 加一 → 通知所有參與主機改用新路由 → 舊擁有者轉為唯讀。
+4. 任一步驟失敗時，thread 留在舊擁有者，`epoch` 不變。
+
+內部資料模型與 A2A 的對應（D-17）：
+
+| 本系統 | A2A | 說明 |
+| --- | --- | --- |
+| Thread | `contextId` | 一個 thread 的所有 A2A Task 共用同一個 `contextId` |
+| Thread 擁有者 `owner`、擁有權世代號 `epoch`（D-18） | Task metadata | 每則狀態變更帶 `epoch`，接收端拒收舊 `epoch` |
+| 一個階段的工作（例如提交立場書、回答質詢） | Task | 每個階段開一個 Task |
+| 狀態機的狀態 | Task 狀態：submitted、working、input-required、completed、failed、canceled | 細部狀態（INTAKE、POSITIONS 等）放在 Task metadata |
+| 等待人簽核或補充 | `input-required` | |
+| 立場書、仲裁報告、ADR | Artifact | 附雜湊值 |
+| 訊息類型（FR-05） | Message 與 metadata 中的類型欄位 | |
+| 端點能力等級、已驗證版本 | Agent Card 的 capabilities、skills、supportedInterfaces | |
+| 遠端待決通知（第 11 節） | Push notification | 只可送到維護者本人的主機（NFR-10） |
+
+A2A 只提供任務與訊息的外層格式。仲裁流程（密封立場、匿名質詢、裁決、簽核）仍由本系統定義。規格來源：[A2A specification](https://a2a-protocol.org/latest/specification/)。
+
 ## 10. 紀錄存放與路由
 
 SCOPE 階段由流程控制器依影響範圍提出存放位置，人確認後系統才寫入。
@@ -300,7 +365,7 @@ SCOPE 階段由流程控制器依影響範圍提出存放位置，人確認後�
 
 ## 12. 風險與待驗證假設
 
-十一個 PoC 必須在實作前完成，因為它們決定各端點的等級與仲裁者的執行方式。
+PoC-01 至 PoC-11 必須在 P1 實作前完成，因為它們決定各端點的等級與仲裁者的執行方式。PoC-12 必須在 P2 開始前完成。
 
 | ID | 假設或風險 | 驗證或緩解方式 | 失敗時的影響 |
 | --- | --- | --- | --- |
@@ -320,6 +385,8 @@ SCOPE 階段由流程控制器依影響範圍提出存放位置，人確認後�
 | PoC-09 | Codex App 的 SSH 專案使用遠端的 config.toml、MCP、skills 與 hooks | 在本機與遠端設定不同的測試 server | 調整註冊位置 |
 | PoC-10 | Codex App 斷線或本機睡眠時，遠端 thread 繼續執行 | 執行長任務後中斷連線 | 遠端部署時該端點降為被動 |
 | PoC-11 | subagent 模式可讀回 transcript，驗證資料包雜湊值與模型 | 以既有的 subagent 讀回機制測試兩家 | 該廠商不提供 subagent 模式 |
+| PoC-12 | 確認 P2 開始時兩家 harness 的 A2A 支援狀態。截至 2026-05，Codex CLI 的 A2A 支援尚未合併（[來源](https://codex.danielvaughan.com/2026/05/01/codex-cli-agent-interoperability-protocols-mcp-acp-a2a/)）；Claude Code 未見原生 A2A 支援 | 查閱兩家官方文件與 release notes；以 A2A 官方 SDK 建立兩台 daemon 的握手測試 | 維持 D-16：daemon 之間用 A2A，端點仍用 MCP。只有在官方提供原生 A2A 時，才可評估新增選配 adapter |
+| R-06 | A2A 規格版本變動，或對方未送 `A2A-Version` header 時被當成 v0.3 | NFR-09 的版本鎖定與契約測試 | 跨主機訊息解析失敗 |
 
 ## 13. 開發計畫
 
@@ -329,7 +396,7 @@ P1 分為 M0 至 M6 七個里程碑；每個里程碑必須通過其驗收關卡
 | --- | --- | --- | --- |
 | M0 規格定稿 | 本文件 v1.0、API schema 草案 | — | 維護者簽核 |
 | M1 PoC | PoC-01 至 PoC-11 結果報告，更新端點能力矩陣 | 手動驗證 | 每個端點的等級已確定 |
-| M2 核心 | daemon、broker、MCP server、流程控制器狀態機 | 單元測試；以模擬 agent 跑完整流程 | 模擬流程從 INTAKE 到 ADR 全部通過 |
+| M2 核心 | daemon、broker、MCP server、流程控制器狀態機；資料模型符合 D-17 的 A2A 對應表 | 單元測試；以模擬 agent 跑完整流程；對應表的轉換測試 | 模擬流程從 INTAKE 到 ADR 全部通過 |
 | M3 Adapter | 四個端點 adapter、Claude skill 與 Codex plugin | 契約測試；四端點端對端測試 | 四個端點都能登記、收發訊息 |
 | M4 仲裁與路由 | 仲裁者啟動、匿名化、ADR 產生、storage adapter | 用一個真實的 engineering-workflow-core 需求試跑 | 產出可簽核的仲裁報告與 ADR |
 | M5 Web 看板 | 第 11 節的畫面 | 使用者驗收測試 | 維護者可只用看板與桌面版完成一個 thread |
@@ -350,7 +417,9 @@ M0 簽核前必須回答以下問題。
 - [ ] D-09：流程控制器不含 LLM，仲裁者為獨立 agent，是否接受？
 - [ ] D-10：完整紀錄留在 broker、repo 只存 ADR 與摘要，是否接受？
 - [ ] 專案名稱（暫稱 Agent Council）與 repo 位置（GitHub 或 GitLab）。
-- [ ] 實作語言：TypeScript（MCP SDK 成熟、開發快）或 Rust / Go（單一 binary、常駐服務較穩）。
+- [ ] 實作語言：TypeScript（MCP SDK 成熟、開發快）或 Rust / Go（單一 binary、常駐服務較穩）。評估條件新增：依 2026-03 的資料，A2A 官方 SDK 提供 Python、JavaScript、Java、C#、Go，沒有官方 Rust SDK。若接受 D-16 並選 Rust，必須使用社群實作或自行實作 A2A。
+- [ ] D-16：P2 的 daemon 之間採 A2A v1.0.x、P1 不實作，是否接受？
+- [ ] D-17：P1 的資料模型必須可對應 A2A，是否接受？
 - [ ] CROSS-EXAM 回合上限的預設值。
 - [ ] 高影響 thread 是否提供「雙仲裁」選項（Claude 與 GPT 各一，用量加倍）。
 - [ ] Google Drive 存放技術研究的資料夾位置。
