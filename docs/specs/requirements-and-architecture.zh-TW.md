@@ -152,7 +152,7 @@ subagent 模式的獨立性保證低於 headless 模式。雜湊值可以證明�
 
 「已投遞」不等於「已開始」。adapter 的指令成功結束，不代表 session 已開始工作（FR-22）。MCP 的通知或連線也不代表端點會開始新的模型回合。
 
-Claude Code 的 Channels 仍是 research preview，自訂 channel 需要開發用旗標（[來源](https://code.claude.com/docs/en/channels)）。Channels 只可作為選配的增強功能；沒有 Channels 時，主要流程必須仍可運作。
+Claude Code 的 Channels 仍是 research preview，自訂 channel 需要開發用旗標（[來源](https://code.claude.com/docs/en/channels)）。Channels 是選配的增強功能；主要流程不可依賴它。PoC-13 驗證可行後，維護者可以啟用它，把訊息即時推進既有的 session。Channels 正式發布且不再需要開發用旗標時，可以重新評估它的定位。
 
 **角色由哪個 session 代表。** 流程控制器依以下順序路由一個回合：
 
@@ -230,7 +230,7 @@ Claude Code 的 Channels 仍是 research preview，自訂 channel 需要開發�
 | ID | 類別 | 需求 |
 | --- | --- | --- |
 | NFR-01 | 改版韌性 | 每個端點必須有獨立 adapter；同廠商的 adapter 可共用程式碼。每個 adapter 必須有契約測試，並記錄已驗證的版本範圍。系統必須分開記錄兩種狀態：使用中版本的健康狀態，以及候選新版的相容性。系統必須每日在隔離環境以最新版 Claude Code 與 Codex 執行握手測試；這項測試不可變更使用中的 CLI，也不可改寫 council init 或 council doctor 寫入的設定（D-12）。候選新版失敗時，系統必須通知人，並標示「新版不相容」；系統不可因此把使用中的已驗證版本標為降級。使用中版本的握手失敗時，系統才把該端點標為降級。 |
-| NFR-02 | 依賴方向 | 系統只可依賴 MCP client 能力與 headless CLI。Claude 端預設以 `claude -p` 啟動。adapter 的啟動介面必須抽象化，使啟動方式可以替換而不變更核心。實驗功能（例如 Codex App Server、Claude Code Channels）與 Claude Agent SDK 只可作為選配 adapter。 |
+| NFR-02 | 依賴方向 | 系統只可依賴 MCP client 能力與 headless CLI。Claude 端預設以 `claude -p` 啟動。adapter 的啟動介面必須抽象化，使啟動方式可以替換而不變更核心。實驗功能（例如 Codex App Server、Claude Code Channels）與 Claude Agent SDK 是選配的 adapter；主要流程不可依賴它們。 |
 | NFR-03 | 資料主權 | P1 的所有討論資料必須留在本機。資料不可經過模型供應商以外的第三方。 |
 | NFR-04 | 資安 | P1 的 MCP server 與 Web 看板必須只綁定 127.0.0.1。兩者必須驗證 HTTP 請求的 Origin header，並拒絕不在允許清單內的來源。每個端點必須使用各自的 token。對方訊息必須視為不可信資料，參與者不可自動執行其中的指令；對方訊息不可擴大接收者的執行權限。附件不可執行。P2 的 A2A gateway 不受 127.0.0.1 的限制，其監聽與驗證依 NFR-09。信任假設：所有 session 以同一個 OS 使用者執行，所以密封立場是流程上的資訊隔離；系統不防禦直接讀取 broker 檔案的惡意程序。 |
 | NFR-05 | 用量與成本 | 系統預設只使用既有訂閱的 CLI，不使用 API；只有 D-19 啟用時才可使用 API。系統不主動查詢或預測用量；用量由上限在結構上限制。除回合上限外，每個回合必須有時間、重試次數與輸出大小的上限，系統必須有同時執行數的上限。CLI 回報觸及用量上限時，流程控制器必須暫停該 thread 並通知人，由人指示何時續跑。系統不可假設固定的重置時間；重置時間依 CLI 的實際回報。這些上限同樣適用於工作交付。 |
