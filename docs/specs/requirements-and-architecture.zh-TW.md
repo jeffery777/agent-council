@@ -532,6 +532,8 @@ M2（v1.0 定稿）簽核前必須回答以下問題。
 - [ ] D-10：完整紀錄留在 broker、repo 只存 ADR 與摘要，是否接受？
 - [ ] engineering-workflow-core 的規範要修改哪些條文，由誰起草。這項修改需要兩家討論；在 Council 完成之前，由維護者協調。
 - [ ] 研究型 thread 寫入 Google Drive 時，NFR-03（資料留在本機）的例外範圍。
+- [ ] 工作項目的結果格式如何對齊 engineering-workflow-core 的 findings 欄位（穩定 ID、disposition、`requirement_relation`）。FR-36 的「偏離」判定應對應到這些欄位，不另立一套分類。
+- [ ] 跨廠商審查會把 diff 送到另一家模型供應商。啟用這條路徑是否需要每個專案的明確決定。
 - [ ] 實作語言：TypeScript（MCP SDK 成熟、開發快）或 Rust / Go（單一 binary）。A2A 官方 SDK 已包含 Rust（[a2aproject/a2a-rs](https://github.com/a2aproject/a2a-rs)），所以 SDK 不再是選型的限制。選型依維護者的熟悉度、MCP 與程序控制的實作難度、測試效率與部署方式決定。
 - [ ] D-16：P2 的 daemon 之間採 A2A v1.0.x、P1 不實作，是否接受？
 - [ ] D-17：P1 的資料模型必須可對應 A2A，是否接受？
