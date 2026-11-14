@@ -25,7 +25,7 @@ assignees: ""
 - 請求／結果欄位與範例：
 - 狀態、錯誤與開始工作的證據：
 - 忙碌、逾時、取消、重試與去重：
-- harness 設定的傳遞及去識別的權限摘要（不貼設定檔原文）：
+- harness 設定的傳遞及權限摘要（依 AGENTS.md 的禁止清單）：
 - 共用 fixture／mock 與真實 CLI 驗證的分界：
 - 依賴、限制與需要人決定的事項：
 - Claude 確認版本／證據：
@@ -37,7 +37,7 @@ assignees: ""
 
 - Writer／角色：
 - 目標與檔案範圍：
-- Branch／非識別的工作區標籤（不填私人路徑或原始 session ID）：
+- Branch／工作區標籤：
 - 依賴：
 - 交付與驗收條件：
 - Reviewer：
@@ -46,7 +46,7 @@ assignees: ""
 
 - Writer／角色：
 - 目標與檔案範圍：
-- Branch／非識別的工作區標籤（不填私人路徑或原始 session ID）：
+- Branch／工作區標籤：
 - 依賴：
 - 交付與驗收條件：
 - Reviewer：
@@ -63,7 +63,7 @@ assignees: ""
 - 必要測試與證據：
 - 驗收者：
 
-在已有授權時，預設以已推送分支交接。Review 綁定目標分支、完整 target_head／base／head SHA、範圍、需求／計畫與契約版本；版本改變後依 CONTRIBUTING 第 6 節重審。無法提交或推送（含已提交但未推送）時才使用 patch 例外，依明確的交接 base 產生含 untracked 的完整差異，附確切命令與原始位元組的 SHA-256。公開紀錄只用非識別標籤及必要的環境／工具類別摘要。交接／review 紀錄依 [CONTRIBUTING.md](https://github.com/jeffery777/agent-council/blob/main/CONTRIBUTING.md) 第 5、6 節；本分支審閱時可先讀取根目錄的同名檔案。
+在已有授權時，預設以已推送分支交接。Review 綁定目標分支、完整 target_head／base／head SHA、範圍、需求／計畫與契約版本；PR head 改變後重審；目標分支前進時依 CONTRIBUTING 第 6 節比對變動檔案並處理。無法提交或推送時記為受阻，由維護者決定。公開紀錄依 AGENTS.md 的禁止清單處理。交接／review 紀錄依 [CONTRIBUTING.md](https://github.com/jeffery777/agent-council/blob/main/CONTRIBUTING.md) 第 5、6 節；本分支審閱時可先讀取根目錄的同名檔案。
 
 ## 進度與修訂
 
