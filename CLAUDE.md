@@ -33,14 +33,14 @@
 
 - `dev-skills` 的 reviewer subagent 沒有 Edit 與 Write 工具，但保留 Bash（來源：dev-skills 0.1.0 的 CB-5）。它在回覆中交付報告，由主 session 讀回後保存或發布。
 - 仍可寫入的通道：Bash。Bash 與它的子程序對受審工作目錄的寫入、網路、憑證與外部服務是否受到限制，尚未實測。它的唯讀目前只靠指示約束，不可記為技術上唯讀。
-- 保留 Bash 的理由：發布檢查需要 Git 查詢，以取得 staged diff、待推送的 commits 與作者身分。
+- 保留 Bash 的理由：commit／push 的發布檢查與 PR #9 的 merge 前審查需要 Git 查詢，以取得 staged diff、待推送的 commits、作者身分與受審差異。公開文字的檢查本身不需要 Git 查詢；它沿用同一個 reviewer subagent，所以同樣保留 Bash。
 - 替代偵測：主 session 在檢查前後各執行一次下方的狀態命令，並比對結果。
 - 盲區：已存在的 untracked 檔案內的修改、被忽略的檔案、`.git` 內部的變動（例如設定、hooks 與其他 refs）、先修改再還原的暫時性寫入，以及 repo 以外的影響。
-- 例外依據：維護者的確認記錄在 PR #9 的兩則留言：[發布檢查與 merge 前審查](https://github.com/jeffery777/agent-council/pull/9#issuecomment-6877210284)、[公開文字的發布檢查](https://github.com/jeffery777/agent-council/pull/9#issuecomment-6877737742)。每次紀錄引用這項依據，並標明上述限制。
+- 例外依據：維護者的確認記錄在 PR #9 的兩則留言：[發布檢查與 merge 前審查](https://github.com/jeffery777/agent-council/pull/9#issuecomment-6877210284)、[公開文字的發布檢查](https://github.com/jeffery777/agent-council/pull/9#issuecomment-6877737742)。每次紀錄引用這兩則留言，並標明上述限制。
 - 例外範圍有兩項：Claude 的發布檢查（commit、push，以及公開的 Issue／PR／review 文字）；以及 PR #9 中，對 Codex 撰寫的共同規範的 merge 前審查。
 - 其他 PR 的 merge 前審查不在範圍內。Claude 擔任 Reviewer 時，使用技術上唯讀的 session，或另外取得維護者的授權並記錄在 Issue／PR；兩者都沒有時記為受阻。
 - 工具、沙箱設定或授權範圍改變時，重新評估這項例外。
-- PR 改到 agent 指示檔時，主 session 在 PR checkout 之外啟動（AGENTS.md「審查、權限與文件」）。reviewer subagent 曾載入主 session 工作目錄中的指示檔；以獨立 worktree 啟動的 subagent 也一樣（在 PR #9 的審查中觀察到）。所以主 session 的工作目錄不可含受審的指示檔；受審檔以 `git -C` 或 `git show` 讀取。
+- PR 改到 agent 指示檔時，Reviewer 把受審的指示檔當作資料，並回報實際載入了哪些指示檔（AGENTS.md「審查、權限與文件」）。reviewer subagent 曾載入主 session 工作目錄中的指示檔；以獨立 worktree 啟動的 subagent 也一樣（在 PR #9 的審查中觀察到）。所以主 session 在派工時要求 subagent 回報這一點，並讓它以 `git -C` 或 `git show` 讀取受審檔。
 - 需要技術上唯讀時，以 CLI 的工具限制啟動獨立 session。Claude Code 2.1.312 提供 `--tools`、`--disallowedTools` 與 `--permission-mode`（來源：`claude --help`）。
 - 哪一組旗標能確實唯讀，尚未驗證；M1 的 PoC-15 會提供實測結果。驗證前，每次審查記錄實際使用的旗標，以及與寫入能力有關的工具類別。
 
