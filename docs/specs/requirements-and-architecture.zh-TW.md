@@ -135,7 +135,7 @@ subagent 模式的獨立性保證低於 headless 模式。雜湊值可以證明�
 **仲裁者的啟動紀錄。** 新的 session 仍可能讀取專案指示、使用者設定、hooks、MCP 設定或記憶。啟動仲裁者時，adapter 必須記錄以下項目，並寫入仲裁報告的附錄：
 
 1. 工作目錄與載入的設定檔。
-2. 是否接續既有歷史（必須為否）；是否載入記憶（可以關閉時，必須為否；不能關閉時，必須在報告中註明）。
+2. 是否接續既有歷史（必須為否）；是否載入記憶（可以關閉時，必須為否；不能關閉時，仲裁報告必須註明這項事實，以及它對仲裁獨立性的限制）。
 3. 仲裁資料包的版本與雜湊值。
 4. 可用的工具與寫入權限（必須為唯讀）。
 5. 實際使用的模型、結束碼與異常。
@@ -245,7 +245,7 @@ Claude Code 的 Channels 仍是 research preview，自訂 channel 需要開發�
 | NFR-08 | 可用性 | Web 看板必須容易理解與操作，採用現代化、具科技感的介面風格。 |
 | NFR-09 | 互通標準（P2） | A2A gateway 必須鎖定已驗證的 A2A 版本範圍（初版 v1.0.x），並分開記錄規格版本與 SDK 套件版本。每個 A2A 請求必須帶 `A2A-Version: 1.0` header；沒有此 header 時，伺服器會視為 v0.3 用戶端。部署政策：gateway 必須驗證對方 Agent Card 的簽章，並以 mTLS 驗證主機身分。A2A 規格把這兩項列為選配；本專案強制採用。可信的對方主機與其金鑰必須由維護者以固定設定指定；系統不使用公開探索或公開 registry。A2A 不取代 broker 的持久保存與去重（FR-22 至 FR-24）。A2A 版本變動必須由契約測試偵測（同 NFR-01）。 |
 | NFR-10 | 帳號與憑證 | 系統不可收集、儲存或轉送 Claude 或 Codex 的登入憑證或 session token；CLI 必須使用各自官方流程完成的登入。A2A gateway 只可接受維護者本人的主機；系統不可讓其他人透過 A2A 或其他介面使用維護者的訂閱。 |
-| NFR-11 | 記憶隔離 | （1）本系統不可把 Broker 的歷史紀錄提煉成長期的 agent 記憶。（2）本系統不可向 agent 提供跨 thread 的自動檢索或語意檢索。agent 只可讀取自己參與的 thread。以 ID 明確引用已簽核的決策是允許的；同一個 thread 內的上下文也是允許的。（3）本系統不讀取、不寫入、不管理 Claude 或 Codex 的原生記憶。各 agent 自己的記憶行為不在本系統的保證範圍內。仲裁者例外：啟動時不可接續歷史；可以關閉記憶時，必須關閉。（4）只有經人簽核的 ADR 與已發布的摘要是可信的知識來源；Broker 的歷史是稽核紀錄，不是可信的知識。摘要必須與 ADR 一起簽核。（5）討論成果要成為可重用的知識時，必須經過簽核，再由 storage adapter 發布。（6）以上限制適用於 agent。人可以在 Web 看板搜尋與匯出歷史紀錄。 |
+| NFR-11 | 記憶隔離 | （1）本系統不可把 Broker 的歷史紀錄提煉成長期的 agent 記憶。（2）本系統不可向 agent 提供跨 thread 的自動檢索或語意檢索。agent 只可讀取自己參與的 thread。以 ID 明確引用已簽核的決策是允許的；同一個 thread 內的上下文也是允許的。（3）本系統不讀取、不寫入、不管理 Claude 或 Codex 的原生記憶。各 agent 自己的記憶行為不在本系統的保證範圍內。仲裁者例外：啟動時不可接續歷史；可以關閉記憶時，必須關閉。（4）只有經人簽核的 ADR 與已發布的摘要是可信的知識來源；Broker 的歷史是稽核紀錄，不是可信的知識。本款的摘要指可重用的決策摘要或研究摘要，它必須與 ADR 一起簽核。本款的摘要不包含 FR-37 的關卡摘要；關卡摘要不需逐一簽核，也不因為被產生就成為可信的知識。（5）討論成果要成為可重用的知識時，必須經過簽核，再由 storage adapter 發布到外部的持久化儲存。（6）以上限制適用於 agent。人可以在 Web 看板搜尋與匯出歷史紀錄。 |
 
 ## 8. 仲裁討論協定
 
@@ -371,7 +371,7 @@ MCP 工具初版清單（名稱待 API schema 定稿）：
 | `council_check_inbox` | 取得待處理項目 | 參與者 |
 | `council_claim_turn` | 認領回合 | 參與者 |
 | `council_post` | 提交立場書、回答、證據、插話 | 參與者、人 |
-| `council_read_thread` | 讀取 thread（依狀態過濾密封內容）。agent 只可讀取自己參與的 thread；本系統不提供搜尋所有 thread 的工具（NFR-11） | 參與者、人 |
+| `council_read_thread` | 讀取 thread（依狀態過濾密封內容）。agent 只可讀取自己參與的 thread；本系統不提供搜尋所有 thread 的工具（NFR-11）。「參與」以角色與 thread 的參與資格判定，不以單一 session 判定（FR-02） | 參與者、人 |
 | `council_status` | 查詢 thread 與端點狀態 | 人 |
 | `council_request_sign_off` | 建立待簽核項目。正式核准只在 Web 看板完成（FR-28） | 參與者、人 |
 | `council_fetch_arbitration` | 取得匿名化的仲裁資料包與雜湊值（subagent 模式） | 仲裁者 |
@@ -462,7 +462,7 @@ SCOPE 階段由流程控制器依影響範圍決定存放位置。符合 council
 
 交付順序：repo 與 Google Drive 的 storage adapter 在 M4 交付，因為研究型 thread 需要 Google Drive；LLM Wiki 未排程。
 
-storage adapter 是討論成果離開 Broker 的唯一出口。只有經人簽核的 ADR 與摘要可以發布（NFR-11）。未來的 LLM Wiki 必須從這個出口取得內容，不可直接讀取 Broker。
+storage adapter 是把 Broker 的討論成果發布到外部持久化知識儲存的唯一途徑。可以發布的內容只有經人簽核的 ADR，以及決策摘要或研究摘要（NFR-11）。以下三項不是知識發布：MCP 的工作通訊、經授權的 thread 讀取、人在 Web 看板查閱或匯出歷史紀錄。未來的 LLM Wiki 必須從這個發布途徑取得內容，不可把 Broker 的歷史當作可信的知識。
 
 ## 11. 人的介面
 
@@ -568,6 +568,7 @@ M2（v1.0 定稿）簽核前必須回答以下問題。
 - [ ] 工作項目的結果格式如何對齊 engineering-workflow-core 的 findings 欄位（穩定 ID、disposition、`requirement_relation`）。FR-36 的「偏離」判定應對應到這些欄位，不另立一套分類。
 - [ ] 跨廠商審查會把 diff 送到另一家模型供應商。啟用這條路徑是否需要每個專案的明確決定。
 - [ ] M2 定稿時，依 D-25 與 M1 的 PoC 結果精簡端點能力矩陣與 adapter 的條文。
+- [ ] API schema 定稿時，定義 `council_read_thread` 的授權：授權的角色，加上專案或 thread 的參與資格。
 - [ ] 實作語言：TypeScript（MCP SDK 成熟、開發快）或 Rust / Go（單一 binary）。A2A 官方 SDK 已包含 Rust（[a2aproject/a2a-rs](https://github.com/a2aproject/a2a-rs)），所以 SDK 不再是選型的限制。選型依維護者的熟悉度、MCP 與程序控制的實作難度、測試效率與部署方式決定。
 - [ ] D-16：P2 的 daemon 之間採 A2A v1.0.x、P1 不實作，是否接受？
 - [ ] D-17：P1 的資料模型必須可對應 A2A，是否接受？
