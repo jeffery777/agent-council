@@ -5,6 +5,9 @@ They check the script only (normal exit, timeout, process-group cleanup).
 They start no real CLI and are no evidence of what the real CLI can do.
 """
 
+import contextlib
+import importlib.util
+import io
 import json
 import os
 import subprocess
@@ -12,6 +15,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RUNNER = os.path.join(HERE, "run-claude-headless.py")
@@ -92,6 +96,44 @@ class RunnerTest(unittest.TestCase):
         self.assertTrue(record["notes"]["process_group_stopped"])
         self.assertFalse(late_write, "a child wrote after the runner returned")
         self.assertLess(elapsed, 15)
+
+    def test_group_stop_not_confirmed(self):
+        """The signal call is refused: the record must not look like a clean run."""
+        spec = importlib.util.spec_from_file_location("runner", RUNNER)
+        runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runner)
+
+        def refused(pid, sig):
+            raise PermissionError
+
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = os.path.join(tmp, "claude")
+            with open(fake, "w") as fh:
+                fh.write(FAKE)
+            os.chmod(fake, 0o755)
+            with open(os.path.join(tmp, "mode"), "w") as fh:
+                fh.write("normal")  # no child is left behind, so nothing needs a real signal
+            check = subprocess.run([fake, "--version"], capture_output=True, text=True)
+            self.assertEqual(check.stdout.strip(), "0.0.0 (fake)")
+            argv = ["runner", "memory-default", "--model", "fake-model", "--attempt", "0"]
+            clean = {k: v for k, v in os.environ.items()
+                     if k not in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")}
+            clean["PATH"] = tmp + os.pathsep + os.environ["PATH"]
+            out = io.StringIO()
+            with mock.patch.object(runner.os, "killpg", refused), \
+                    mock.patch.object(runner.stop_group, "__defaults__", (0.2,)), \
+                    mock.patch.dict(os.environ, clean, clear=True), \
+                    mock.patch.object(sys, "argv", argv), \
+                    contextlib.redirect_stdout(out), \
+                    self.assertRaises(SystemExit) as stopped:
+                runner.main()
+        self.assertNotIn(stopped.exception.code, (0, None))
+        record = json.loads(out.getvalue())
+        self.assertEqual(record["cli_version"], "0.0.0 (fake)")
+        self.assertEqual(record["exit_code"], 0)  # the CLI's own exit code is kept
+        self.assertFalse(record["notes"]["process_group_stopped"])
+        self.assertEqual(record["error_class"], "other")
+        self.assertEqual(record["notes"]["test_repo_unchanged"], "unconfirmed")
 
 
 if __name__ == "__main__":

@@ -311,6 +311,8 @@ def main():
     denials = (result or {}).get("permission_denials") or []
     if timed_out:
         error_class = "timeout"
+    elif not group_stopped:
+        error_class = "other"  # the run cannot be trusted: something may still be running
     elif result is None:
         error_class = "other"
     elif result.get("is_error"):
@@ -369,7 +371,8 @@ def main():
             "structured_output": structured,
             "result_text": str((result or {}).get("result", "")),
             "test_repo_head_before": before["head"],
-            "test_repo_unchanged": before == after,
+            # Without a confirmed stop, the comparison proves nothing about later writes.
+            "test_repo_unchanged": (before == after) if group_stopped else "unconfirmed",
             "test_repo_status_after": after["status"],
             "event_types": {t: events.count(t) for t in sorted(set(filter(None, events)))},
         },
@@ -379,6 +382,8 @@ def main():
     with open(os.path.join(LOCAL, "runs", run_id + ".json"), "w", encoding="utf-8") as fh:
         fh.write(text + "\n")
     print(text)
+    if not group_stopped:
+        sys.exit("the process group could not be confirmed stopped; do not rely on this run")
 
 
 if __name__ == "__main__":
