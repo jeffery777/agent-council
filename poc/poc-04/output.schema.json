@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["task_id", "requirements", "files_read", "summary"],
+  "properties": {
+    "task_id": { "type": "string", "enum": ["poc-04"] },
+    "requirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status", "evidence"],
+        "properties": {
+          "id": { "type": "string", "enum": ["REQ-1", "REQ-2", "REQ-3"] },
+          "status": { "type": "string", "enum": ["implemented", "not_implemented", "unclear"] },
+          "evidence": { "type": "string" }
+        }
+      }
+    },
+    "files_read": { "type": "array", "items": { "type": "string" } },
+    "summary": { "type": "string" }
+  }
+}
