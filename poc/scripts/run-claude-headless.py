@@ -7,7 +7,8 @@ The script:
   - refuses to run when an API key variable is present (plan rule 4);
   - starts the CLI with a small, explicit environment, so that variables
     inherited from a parent agent session do not reach it;
-  - enforces a timeout and stops the whole process group when it expires;
+  - enforces a timeout, and after every run (timeout or normal exit) stops
+    what is left of the process group;
   - compares the test repository before and after the run;
   - writes the raw output and the record under poc/local/ (not in Git).
 
@@ -158,6 +159,34 @@ def validate(value, schema, where="$"):
     return errors
 
 
+def stop_group(proc, grace=5.0):
+    """Stop every member of the process group of proc. True when the group is gone.
+
+    The leader may exit before its children do, so the group is checked, not
+    only the leader: SIGTERM first, SIGKILL after the grace period.
+    """
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(proc.pid, sig)
+        except ProcessLookupError:
+            proc.wait()
+            return True
+        except PermissionError:
+            pass  # macOS reports this while only exited members remain
+        deadline = time.monotonic() + grace
+        while time.monotonic() < deadline:
+            proc.poll()  # reap the leader, otherwise the group never empties
+            try:
+                os.killpg(proc.pid, 0)
+            except ProcessLookupError:
+                proc.wait()
+                return True
+            except PermissionError:
+                pass
+            time.sleep(0.05)
+    return False
+
+
 def redact(text, test_repo):
     for real, label in ((test_repo, "<testrepo>"), (REPO, "<repo>"),
                         (os.path.expanduser("~"), "<home>")):
@@ -224,17 +253,10 @@ def main():
             proc.communicate(prompt.encode(), timeout=args.timeout)
         except subprocess.TimeoutExpired:
             timed_out = True
-            for sig in (signal.SIGTERM, signal.SIGKILL):
-                try:
-                    os.killpg(proc.pid, sig)
-                    proc.wait(timeout=10)
-                    break
-                except ProcessLookupError:
-                    break
-                except subprocess.TimeoutExpired:
-                    continue
-            proc.wait()
-    duration_ms = int((time.monotonic() - started) * 1000)
+        duration_ms = int((time.monotonic() - started) * 1000)  # without the cleanup
+        # Stop whatever is left of the process group, also after a normal exit,
+        # so that the "after" snapshot is taken when nothing can still write.
+        group_stopped = stop_group(proc)
     after = repo_state(test_repo)
 
     init, result, events = None, None, []
@@ -337,6 +359,7 @@ def main():
         "error_class": error_class,
         "notes": {
             "timed_out": timed_out,
+            "process_group_stopped": group_stopped,
             "result_subtype": (result or {}).get("subtype", "unknown"),
             "result_is_error": (result or {}).get("is_error", "unknown"),
             "rate_limit_events": rate_limits,
@@ -344,7 +367,7 @@ def main():
             "models_in_result_usage": usage_models,
             "format_errors": format_errors,
             "structured_output": structured,
-            "result_text": str((result or {}).get("result", ""))[:400],
+            "result_text": str((result or {}).get("result", "")),
             "test_repo_head_before": before["head"],
             "test_repo_unchanged": before == after,
             "test_repo_status_after": after["status"],

@@ -44,7 +44,8 @@ poc/scripts/run-claude-headless.py poc-04 --model <model> --attempt 1
 
 - 案例名稱與各自的旗標寫在腳本的 `CASES`。
 - 腳本在測試 repo 中啟動 CLI，只傳入少數必要的環境變數，並設定逾時。環境中有 API key 變數時，腳本會停止。
-- 原始輸出含本機路徑與 session ID，只留在 `poc/local/`。寫入報告的內容取自結果紀錄，並先移除這些資料。
+- 原始輸出含本機路徑與 session ID，只留在 `poc/local/`。結果紀錄只替換了三種已知路徑，也不是可以直接公開的內容；寫入報告前要人工移除其餘的識別資料。
+- `poc/scripts/test-run-claude-headless.py` 用假的 CLI 離線測試腳本的正常結束與逾時清理，假的 CLI 能執行時不會啟動真實 CLI，測試會先確認這一點。測試需要本機已有測試 repo，並會在 `poc/local/` 留下 attempt 0、模型為 `fake-model` 的紀錄；這些不是 PoC 的結果。
 - 啟動 CLI 會讓它寫入使用者層級的狀態檔，也會使用訂閱用量。每次執行前先取得維護者同意。
 
 ## 測試 repo
