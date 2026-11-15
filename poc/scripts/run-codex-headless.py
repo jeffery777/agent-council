@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Run one authorized M1 Codex case and retain an m1-r2 record locally.
 
-Throwaway PoC code; standard library only. No credential files are read or
-copied. Unknown observations stay unknown. Offline tests are not CLI evidence.
+Throwaway PoC code; standard library only. Codex's dotenv is read to check
+variable names only; its contents are not retained. Unknown observations stay
+unknown. Offline tests are not CLI evidence.
 """
 
 import argparse
@@ -335,7 +336,7 @@ def main():
                                   "observed_loaded_categories": "unknown",
                                   "auth_observed": "Logged in using ChatGPT",
                                   "child_api_key_variables": [], "dotenv_api_key_variables": []},
-        "started_evidence": work_items or harness_denials(stderr) or ("task-specific final agent_message" if obs["messages"] else "none"),
+        "started_evidence": work_items or harness_denials(stderr) or ("final agent_message only" if obs["messages"] else "none"),
         "error_class": classification,
         "notes": {**outcome, "before": before, "after": after,
                   "test_repo_unchanged": before == after if after else "unconfirmed",
