@@ -1,3 +1,29 @@
 # Keep the project's shared agent instructions in version control.
 !/AGENTS.md
 !/CLAUDE.md
+
+# Local files produced by the PoC (M1 plan, rule 2): SQLite files, run output.
+/poc/local/
+*.sqlite*
+*.db
+*.db-*
+__pycache__/
+*.pyc
+
+# Common names of files that hold secrets or local settings (Issue #10, item 1).
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+id_ecdsa
+credentials.json
+auth.json
+.netrc
+.npmrc
+.claude/settings.local.json
+.DS_Store
