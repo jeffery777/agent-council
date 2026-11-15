@@ -4,7 +4,7 @@ agent-council is a local communication layer for AI coding agents. It lets Claud
 
 ## Status
 
-This project is in the specification phase. There is no code yet. The next step is the M1 proof of concept.
+This project is in the specification phase. There is no product code yet. The M1 proof of concept is in preparation; its throwaway test code is in `poc/`.
 
 ## How it works
 
@@ -26,6 +26,7 @@ Claude and Codex connect only as MCP clients. Vendor-specific behavior stays in 
 | [Agent collaboration task template](.github/ISSUE_TEMPLATE/agent-task.md) | Traditional Chinese |
 | [Requirements and architecture specification v0.6](docs/specs/requirements-and-architecture.zh-TW.md) | Traditional Chinese |
 | [M1 dual-CLI PoC plan](docs/plans/poc-plan-m1.zh-TW.md) | Traditional Chinese |
+| [M1 dual-CLI PoC report (skeleton, no results yet)](docs/reports/poc-m1-report.zh-TW.md) | Traditional Chinese |
 | [Issue for engineering-workflow-core, Traditional Chinese version](docs/upstream/engineering-workflow-core-issue-draft.zh-TW.md) | Traditional Chinese |
 
 ## License
