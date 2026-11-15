@@ -4,7 +4,7 @@ agent-council is a local communication layer for AI coding agents. It lets Claud
 
 ## Status
 
-This project is in the specification phase. There is no code yet. The next step is the M1 proof of concept.
+This project is in the specification phase. There is no product code yet. The M1 proof of concept is in preparation; its throwaway test code is in `poc/`.
 
 ## How it works
 
