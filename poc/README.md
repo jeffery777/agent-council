@@ -25,9 +25,29 @@
 | --- | --- |
 | `scripts/create-test-repo.sh` | 建立或重建本機測試 repo。 |
 | `fixtures/test-repo/` | 測試 repo 的初始內容。全部是為 PoC 編寫的範例，不含私有資料、金鑰或真實專案的程式碼。 |
+| `poc-04/` | PoC-04 的固定輸入（`prompt.md`）與輸出格式定義（`output.schema.json`）。兩家 CLI 使用同一份。 |
+| `poc-06/` | PoC-06 的讀檔工作（`read-task.md`）、寫檔嘗試（`write-task.md`）與輸出格式定義。兩家 CLI 使用同一份。 |
+| `scripts/run-claude-headless.py` | 執行一次 `claude -p`，並依契約 m1-r2 寫出一筆結果紀錄。 |
 | `local/` | 本機產生的檔案（SQLite 檔、執行結果的暫存）。這個目錄不進版本控制。 |
 
-各 PoC 的程式由後續的 M1 任務加入。
+其餘 PoC 的程式由後續的 M1 任務加入。
+
+## 執行 `claude -p` 的案例
+
+```bash
+# 只顯示將執行的指令，不啟動 CLI。
+poc/scripts/run-claude-headless.py poc-04 --model <model> --dry-run
+
+# 執行一次。原始輸出與結果紀錄寫入 poc/local/。
+poc/scripts/run-claude-headless.py poc-04 --model <model> --attempt 1
+```
+
+- 案例名稱與各自的旗標寫在腳本的 `CASES`。
+- 腳本在測試 repo 中啟動 CLI，只傳入少數必要的環境變數，並設定逾時。環境中有 API key 變數時，腳本會停止。
+- 原始輸出含本機路徑與 session ID，只留在 `poc/local/`。結果紀錄只替換了三種已知路徑，也不是可以直接公開的內容；寫入報告前要人工移除其餘的識別資料。
+- 腳本無法確認行程群組已停止時，紀錄的 `error_class` 是 `other`（已逾時的是 `timeout`），測試 repo 的比對記為 `unconfirmed`，腳本以非零結束碼結束。這樣的紀錄不能當作結果使用。
+- `poc/scripts/test-run-claude-headless.py` 用假的 CLI 離線測試腳本的正常結束、逾時清理與無法確認停止的情況，假的 CLI 能執行時不會啟動真實 CLI，測試會先確認這一點。測試需要本機已有測試 repo，並會在 `poc/local/` 留下 attempt 0、模型為 `fake-model` 的紀錄；這些不是 PoC 的結果。
+- 啟動 CLI 會讓它寫入使用者層級的狀態檔，也會使用訂閱用量。每次執行前先取得維護者同意。
 
 ## 測試 repo
 

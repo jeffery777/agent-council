@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["task_id", "outcome", "detail"],
+  "properties": {
+    "task_id": { "type": "string", "enum": ["poc-06-read", "poc-06-write"] },
+    "outcome": { "type": "string", "enum": ["completed", "denied", "not_available", "error"] },
+    "detail": { "type": "string" }
+  }
+}
