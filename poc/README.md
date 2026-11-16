@@ -27,6 +27,8 @@
 | `fixtures/test-repo/` | 測試 repo 的初始內容。全部是為 PoC 編寫的範例，不含私有資料、金鑰或真實專案的程式碼。 |
 | `poc-04/` | PoC-04 的固定輸入（`prompt.md`）與輸出格式定義（`output.schema.json`）。兩家 CLI 使用同一份。 |
 | `poc-06/` | PoC-06 的讀檔工作（`read-task.md`）、寫檔嘗試（`write-task.md`）與輸出格式定義。兩家 CLI 使用同一份。 |
+| `poc-15/` | PoC-15 的審查工作（`review-task.md`）與輸出格式定義，兩家 CLI 使用同一份；受審的變更內容（`change/`，其中刻意含有不安全的程式碼，不可複製使用）；埋入的三個已知問題（`known-issues.json`，不交給審查方）。 |
+| `scripts/prepare-poc-15-change.sh` | 把 `poc-15/change/` 的內容提交到測試 repo 的 `poc-15-change` 分支。 |
 | `scripts/run-claude-headless.py` | 執行一次 `claude -p`，並依契約 m1-r2 寫出一筆結果紀錄。 |
 | `local/` | 本機產生的檔案（SQLite 檔、執行結果的暫存）。這個目錄不進版本控制。 |
 
@@ -44,10 +46,26 @@ poc/scripts/run-claude-headless.py poc-04 --model <model> --attempt 1
 
 - 案例名稱與各自的旗標寫在腳本的 `CASES`。
 - 腳本在測試 repo 中啟動 CLI，只傳入少數必要的環境變數，並設定逾時。環境中有 API key 變數時，腳本會停止。
+- 啟動前，腳本以 `claude auth status --json` 確認登入方式是訂閱登入；不是時停止，不啟動 CLI。紀錄只保留登入方式的兩個欄位。
 - 原始輸出含本機路徑與 session ID，只留在 `poc/local/`。結果紀錄只替換了三種已知路徑，也不是可以直接公開的內容；寫入報告前要人工移除其餘的識別資料。
 - 腳本無法確認行程群組已停止時，紀錄的 `error_class` 是 `other`（已逾時的是 `timeout`），測試 repo 的比對記為 `unconfirmed`，腳本以非零結束碼結束。這樣的紀錄不能當作結果使用。
 - `poc/scripts/test-run-claude-headless.py` 用假的 CLI 離線測試腳本的正常結束、逾時清理與無法確認停止的情況，假的 CLI 能執行時不會啟動真實 CLI，測試會先確認這一點。測試需要本機已有測試 repo，並會在 `poc/local/` 留下 attempt 0、模型為 `fake-model` 的紀錄；這些不是 PoC 的結果。
 - 啟動 CLI 會讓它寫入使用者層級的狀態檔，也會使用訂閱用量。每次執行前先取得維護者同意。
+
+## PoC-15 的受審變更
+
+```bash
+# 在測試 repo 建立 poc-15-change 分支並提交變更。分支已存在時，腳本會停止，不做任何修改。
+poc/scripts/prepare-poc-15-change.sh
+
+# 執行一次審查。
+poc/scripts/run-claude-headless.py poc-15 --model <model> --attempt 1
+```
+
+- 變更是一個 commit，作者身分與時間固定。`change/` 與測試 repo 初始內容都沒有改變時，重建後的 commit ID 相同。
+- 腳本只寫入測試 repo，並讓測試 repo 停在 `poc-15-change` 分支。PoC-04、PoC-06 的案例要在初始內容上執行；執行前先切回：`git -C <testrepo> switch main`。
+- 審查的輸入是 `review-task.md`。執行腳本把其中的 `{{BASE}}`、`{{HEAD}}`、`{{DIFF}}` 換成測試 repo 的兩個 commit ID 與 `git diff` 的輸出，再由 stdin 傳入。兩家 CLI 用同樣的方式產生輸入。
+- 腳本依 `known-issues.json` 對輸出做第一次比對（發現中是否提到對應的函式名稱）。這只是初步比對；是否算找到，以報告中的人工判定為準。
 
 ## 測試 repo
 

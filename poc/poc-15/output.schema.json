@@ -1,0 +1,29 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["task_id", "reviewed_base", "reviewed_head", "deviates_from_requirements", "findings", "summary"],
+  "properties": {
+    "task_id": { "type": "string", "enum": ["poc-15"] },
+    "reviewed_base": { "type": "string" },
+    "reviewed_head": { "type": "string" },
+    "deviates_from_requirements": { "type": "string", "enum": ["yes", "no"] },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "severity", "requirement_relation", "file", "line", "finding", "evidence"],
+        "properties": {
+          "id": { "type": "string" },
+          "severity": { "type": "string", "enum": ["MUST-FIX", "SHOULD-FIX", "NIT", "SCOPE-CREEP", "REQ-GAP"] },
+          "requirement_relation": { "type": "string", "enum": ["in-scope", "gap", "no-requirement", "unrelated"] },
+          "file": { "type": "string" },
+          "line": { "type": "string" },
+          "finding": { "type": "string" },
+          "evidence": { "type": "string" }
+        }
+      }
+    },
+    "summary": { "type": "string" }
+  }
+}
