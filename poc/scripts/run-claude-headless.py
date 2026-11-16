@@ -127,13 +127,19 @@ def test_repo_path():
     return path
 
 
+AUTH_STATUS_TIMEOUT = 30  # seconds
+
+
 def subscription_login(env):
     """Ask the CLI how it is logged in. Stops unless it is the subscription login.
 
     Only the two fields that name the login method are read and kept.
     """
-    out = subprocess.run(["claude", "auth", "status", "--json"], env=env,
-                         capture_output=True, text=True, check=False)
+    try:
+        out = subprocess.run(["claude", "auth", "status", "--json"], env=env, capture_output=True,
+                             text=True, check=False, timeout=AUTH_STATUS_TIMEOUT)
+    except (subprocess.TimeoutExpired, OSError):
+        sys.exit("`claude auth status --json` did not answer; not starting the CLI")
     try:
         status = json.loads(out.stdout)
         seen = {"authMethod": str(status.get("authMethod")),
@@ -176,7 +182,9 @@ def known_issues_found(structured, known):
     requirements. The report states the final judgment.
     """
     found = {}
-    findings = [f for f in (structured or {}).get("findings", []) if isinstance(f, dict)]
+    # The output may not follow the schema; the record must still be written.
+    findings = structured.get("findings") if isinstance(structured, dict) else None
+    findings = [f for f in findings if isinstance(f, dict)] if isinstance(findings, list) else []
     for issue in known["issues"]:
         hits = [f for f in findings if issue["symbol"] in json.dumps(f, ensure_ascii=False)]
         if issue.get("needs_scope_relation") == "yes":
