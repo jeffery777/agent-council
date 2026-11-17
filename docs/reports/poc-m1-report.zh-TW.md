@@ -1,8 +1,8 @@
 # Agent Council：M1 雙 CLI PoC 報告
 
-狀態：進行中 · 2026-11-15 · 對應 [M1 雙 CLI PoC 計畫](../plans/poc-plan-m1.zh-TW.md)（2026-11-10 草案）與規格 v0.6
+狀態：進行中 · 2026-11-16 · 對應 [M1 雙 CLI PoC 計畫](../plans/poc-plan-m1.zh-TW.md)（2026-11-10 草案）與規格 v0.6
 
-目前已填：環境紀錄，以及 PoC-04、PoC-06 中 Claude 的部分（M1-2）。其餘各節的「待填」不代表任何結果。
+目前已填：環境紀錄、PoC-04 與 PoC-06（M1-2），以及 PoC-15 中 Claude 的部分（M1-3）。其餘各節的「待填」不代表任何結果。
 
 ## 1. 填寫規則
 
@@ -39,7 +39,7 @@
 | PoC-06 headless 不卡在核准提示 | 通過。Claude、Codex 的部分均通過。 | 2026-11-15 | Codex 讀檔不需人介入，patch 寫入請求被拒後指令會結束，符合計畫第 5 節的通過條件；直接工具名稱、精確目標及不經 shell 的路徑仍列為限制。adapter 須同時檢查 JSONL、stderr 與 repo 比對。 |
 | PoC-13 投遞到 Claude Code 的既有 session | 待填 | | |
 | PoC-14 `codex queue` 投遞到既有 session | 待填 | | |
-| PoC-15 跨廠商的唯讀審查 | 待填 | | |
+| PoC-15 跨廠商的唯讀審查 | Claude 的部分：通過。Codex 的部分：待填。 | 2026-11-16（Claude） | 見該節。整項結論待 Codex 的部分完成後填入。 |
 | 整合測試：兩家 CLI 的問答往返 | 待填 | | |
 
 結論填「通過」、「部分通過」、「不通過」或「未完成」。「未完成」要說明原因（計畫第 7、9 節）。
@@ -314,26 +314,85 @@
 
 ### PoC-15：跨廠商的唯讀審查
 
-- 執行日期與 CLI 版本：待填
-- 與計畫的差異（旗標、步驟）：待填
-- 實際執行的指令（已移除敏感資料）：待填
-- 結束碼：待填
-- 輸出的格式：待填
+受審的變更、審查工作與輸出格式兩家使用同一份：
+
+- 受審的變更：`poc/poc-15/change/` 的內容，由 `poc/scripts/prepare-poc-15-change.sh` 提交到測試 repo 的 `poc-15-change` 分支。base 是測試 repo 的初始 commit `6cc46aa598a7a63957485d087a787c39c386e0cc`，head 是 `d0c104fea561442870968015ea3de270460f97d0`。作者身分與時間固定；內容相同時，重建後的 commit ID 相同。
+- 變更的內容：在 `docs/requirements.md` 新增 REQ-4、REQ-5，並在 `src/wordcount.py` 新增三個函式與對應的測試。埋入的三個已知問題列在 `poc/poc-15/known-issues.json`，這個檔案不交給審查方：
+
+  | 類別 | 位置 | 問題 |
+  | --- | --- | --- |
+  | 邏輯錯誤 | `longest_line` | 違反 REQ-4：沒有換行結尾的最後一行被略過；只有一行且沒有換行時丟出例外。變更附的測試只測有換行結尾的輸入，測試會通過。 |
+  | 安全問題 | `count_file` | 路徑直接串接進 shell 指令（命令注入）。 |
+  | 超出需求範圍 | `word_frequencies` | 沒有任何需求對應。`docs/requirements.md` 寫明未列出的都不在範圍內。 |
+
+- 審查工作：`poc/poc-15/review-task.md`。執行腳本把其中的 `{{BASE}}`、`{{HEAD}}`、`{{DIFF}}` 換成兩個 commit ID 與 `git diff` 的輸出，再由 stdin 傳入。
+- 輸出格式：`poc/poc-15/output.schema.json`。每項發現有 `id`、`severity`、`requirement_relation`、`file`、`line`、`finding`、`evidence`；另有 `reviewed_base`、`reviewed_head`，以及整體的 `deviates_from_requirements`（對應 FR-36）。`severity` 與 `requirement_relation` 的值取自 dev-skills 0.1.0 的 review 報告格式；它與 engineering-workflow-core 的 findings 契約是否一致，尚未核對。這份格式沒有 disposition 欄位：這次的設計假設 disposition 由收到結果的一方填寫。
+
+#### Claude 的部分
+
+- 執行日期與 CLI 版本：2026-11-16，Claude Code 2.1.312。模型 `claude-sonnet-5-5`，維護者於 2026-11-16 在開發對話中確認。
+- 與計畫的差異（旗標、步驟）：
+  - 唯讀設定與 PoC-04 相同，沒有新的旗標。唯讀設定下沒有 Git 工具，審查方不能自己執行 `git diff`；所以 diff 全文放在輸入中，head 的檔案另可用讀取類工具讀取。
+  - 每次啟動前，腳本多執行一次 `claude auth status --json`，確認登入方式是訂閱登入（`authMethod` 為 `claude.ai`、`apiProvider` 為 `firstParty`），不是時不啟動 CLI。這是 Issue #19 第 7 項的處置。`claude auth status --help` 列出 `--json` 與 `--text` 兩個選項。
+  - 計畫的題目是審查「另一家產生的 diff」。這份 diff 是 Claude 製作的共用 fixture，所以這三次是 Claude 的 CLI 審查 Claude 製作的內容；跨廠商的方向由 Codex 的部分提供。
+- 實際執行的指令（已移除敏感資料）：由 `poc/scripts/run-claude-headless.py poc-15` 在 `<testrepo>` 中啟動，提示由 stdin 傳入。三次相同。
+
+  ```text
+  claude -p --model claude-sonnet-5-5 --output-format stream-json --verbose --no-session-persistence --tools Read,Grep,Glob --strict-mcp-config --permission-mode dontAsk --safe-mode --json-schema <poc/poc-15/output.schema.json>
+  ```
+
+- 結束碼：三次都是 0。沒有逾時（上限 180 秒）。耗時（不含清理）依序為 9.7、10.2、10.0 秒。
+- 輸出的格式：與 PoC-04 相同的 JSONL 事件串流。三次的 `structured_output` 都符合格式；`reviewed_base` 與 `reviewed_head` 都與輸入的兩個 commit ID 相同；發現的 `id` 沒有重複。三次的輸入相同（提示與 diff 的雜湊相同）。
 - 觀察與證據：
 
-  | 審查方 | 次數 | 實際生效的權限 | 審查的 commit | 輸出符合格式 | 找到的已知問題（邏輯、安全、超出範圍） | 審查後 repo 是否未被修改 |
+  | 審查方 | 次數 | 實際生效的權限（init 事件） | 審查的 commit | 輸出符合格式 | 找到的已知問題（邏輯、安全、超出範圍） | 審查後 repo 是否未被修改 |
   | --- | --- | --- | --- | --- | --- | --- |
-  | `codex exec` | 1 | 待填 | 待填 | 待填 | 待填 | 待填 |
-  | `codex exec` | 2 | 待填 | 待填 | 待填 | 待填 | 待填 |
-  | `codex exec` | 3 | 待填 | 待填 | 待填 | 待填 | 待填 |
-  | `claude -p` | 1 | 待填 | 待填 | 待填 | 待填 | 待填 |
-  | `claude -p` | 2 | 待填 | 待填 | 待填 | 待填 | 待填 |
-  | `claude -p` | 3 | 待填 | 待填 | 待填 | 待填 | 待填 |
+  | `claude -p` | 1 | 工具：Glob、Grep、Read、StructuredOutput；模式 `dontAsk`；MCP server：無 | head `d0c104fe…`（base `6cc46aa5…`） | 是 | 三個都找到；發現共 5 項 | 是 |
+  | `claude -p` | 2 | 同上 | 同上 | 是 | 三個都找到；發現共 5 項 | 是 |
+  | `claude -p` | 3 | 同上 | 同上 | 是 | 三個都找到；發現共 6 項 | 是 |
 
-- 結論（通過、部分通過、不通過）：待填
-- 對規格的影響：待填
-- 給 engineering-workflow-core 的資訊（跨廠商 reviewer 路徑實際能提供的證據，計畫第 8 節）：待填
-- 限制與未驗證事項：待填
+  - 三個已知問題在三次輸出中的分類相同：
+    - 邏輯錯誤：`MUST-FIX`、`in-scope`，指出 `longest_line` 略過沒有換行結尾的最後一行、違反 REQ-4，並指出沒有換行時會丟出例外。
+    - 安全問題：`MUST-FIX`、`in-scope`，指出 `count_file` 以 `shell=True` 串接路徑，可被命令注入。
+    - 超出需求範圍：`SCOPE-CREEP`、`no-requirement`，指出 `word_frequencies` 沒有需求對應，並引用需求文件的範圍聲明。
+  - 「找到」的判定：腳本先比對發現中是否提到對應的函式名稱（超出範圍的那一項另要求標為 `no-requirement` 或 `SCOPE-CREEP`），再由 Writer（Claude 的主 session）讀過每項發現的文字確認；維護者本人沒有核對原始紀錄。三次、三個問題的兩種判定都一致。
+  - 三次的 `deviates_from_requirements` 都是 `yes`。
+  - 已知問題以外的發現：每次 2 至 3 項，例如 `count_file` 沒有明確以 UTF-8 讀檔、測試沒有涵蓋沒有換行結尾的輸入、`longest_line` 沒有處理 `\r\n`。其中沒有處理 `\r\n` 與沒有明確以 UTF-8 讀檔是 fixture 中確實存在、但沒有列入已知問題的缺陷。這些發現的嚴重度在各次之間不完全相同（例如測試不足那一項分別是 `NIT`、`SHOULD-FIX`、`NIT`）。
+  - 實際的工具呼叫：三次都只有 `StructuredOutput`。審查方沒有使用讀取類工具，只依輸入中的 diff 作答。`permission_denials` 三次都是空的。
+  - 模型：三次的 init 事件與 `result` 事件的用量都只回報 `claude-sonnet-5-5`，與指定的相同。
+  - 登入：啟動前的查詢三次都是訂閱登入；init 事件的 `apiKeySource` 三次都是 `none`。
+  - 開始工作的證據：每次有一個 assistant 事件與一次 `StructuredOutput` 呼叫，`result` 事件的 `num_turns` 是 2。
+  - 每次結束後，腳本先確認行程群組已停止，再比對測試 repo 的 HEAD、`git status`（含被忽略的檔案）與 `.git` 以外所有檔案的雜湊。三次都相同。
+  - 三次都有一個 `rate_limit_event`，狀態是 `allowed`。沒有觸及用量上限。
+- 結論（通過、部分通過、不通過）：Claude 的部分通過。三次輸出都符合格式；有實際生效權限的證據（init 事件的工具清單與權限模式）；測試 repo 沒有被修改；超出需求範圍的變更三次都被指出。
+- 對規格的影響：
+  - 規格 PoC-15：`claude -p` 可以在唯讀設定下審查一份 diff 並回傳固定格式的結果。整項結論待 Codex 的部分。
+  - FR-36：這三次中，「是否偏離需求」能以一個欄位回報，各項發現也都能以 `id`、`severity`、`requirement_relation` 表達。提議（待 M2 決定）：規格第 14 節關於結果格式如何對齊 findings 欄位的未決問題，可以沿用這組欄位，不另立分類；disposition 由接收方填寫。依據只有一份 diff、一個模型的三次執行。
+  - 審查方在唯讀設定下拿不到 Git 工具。需要它自己取得 diff 時，要由啟動方把 diff 放進輸入，或另外提供唯讀的 Git 查詢方式。
+  - 計畫要求每項發現有「穩定的 ID」，沒有定義穩定的範圍。這次採用的解讀是「單次輸出內唯一」，通過的判定也依這個解讀。維護者於 2026-11-16 在開發對話中確認這個解讀即可。發現的 `id` 只在單次輸出內穩定。同一個問題在三次中的編號不同（例如邏輯錯誤是 `F-003`、`F-003`、`F-002`）。需要跨輪次追蹤同一項發現時，不能直接比對 `id`。
+  - M2 的未決事項（維護者於 2026-11-16 決定不在 PoC-15 加測）：審查進入下一輪時，同一項發現如何沿用同一個 ID。提議的做法是由接收方在第一輪後替每項發現配固定的 ID，下一輪的輸入附上這份清單，要求審查方逐項回報狀態，新發現另外編號。這個做法沒有測試。它併入規格第 14 節關於結果格式如何對齊 findings 欄位的未決問題。
+- 給 engineering-workflow-core 的資訊（跨廠商 reviewer 路徑實際能提供的證據，計畫第 8 節）：以下只涵蓋 `claude -p`，Codex 的部分完成後補齊。
+  - 可以取得的證據：
+    - init 事件回報的工具清單、權限模式、MCP server 清單與模型。這些是 harness 回報的觀察值，不是從旗標推定的。
+    - `result` 事件的 `permission_denials`（被拒絕的工具呼叫）與實際使用的模型。
+    - 啟動方自己做的：受審的 base／head commit ID 與 diff 雜湊、審查前後的 repo 比對、行程群組已停止的確認。
+  - 不能取得、或這次沒有取得的證據：
+    - 工具清單證明沒有寫入類工具，不證明「所有通道都唯讀」。這三次沒有發生寫入的嘗試，所以沒有「寫入被拒絕」的觀察；那一項的證據在 PoC-06。
+    - repo 比對偵測不到先改再還原的寫入，也不涵蓋測試 repo 以外的位置。
+    - 審查方實際讀了哪些內容：這三次沒有任何讀取類工具的呼叫，審查只依據輸入中的 diff。
+- 限制與未驗證事項：
+  - 一份 diff、一個模型、三次。三個問題都不隱蔽；這個結果不代表對一般變更的審查品質。
+  - 這三次不是跨廠商：diff 與審查方來自同一家。
+  - 啟動 CLI 的工作階段環境中有一個指定 API 位址的變數；腳本的環境白名單沒有把它傳給 CLI。CLI 實際連線的位址沒有另外驗證。
+  - init 事件的 `plugins` 仍列出一個使用者安裝的外掛，與 PoC-04 的觀察相同；它在 `--safe-mode` 下是否完全沒有作用，尚未驗證。
+  - 記憶與專案指示檔的關閉方法沿用 PoC-04 的結果（`--safe-mode`），這次沒有重測。
+  - 沒有測試審查方在輸入之外自行讀檔或嘗試寫入的情況。
+  - 已知問題清單放在測試 repo 之外，但與它在同一台主機上。這三次沒有任何讀取類工具的呼叫，所以沒有讀到它；審查方能讀取測試 repo 以外的路徑時，要記錄它實際讀了哪些內容。
+  - 腳本對已知問題的初步比對只看函式名稱，會把談同一個函式的其他發現也算進去；表中的結果以 Writer 讀過發現文字後的判定為準。
+
+#### Codex 的部分
+
+待填（Issue #13 的 Codex Task）。
 
 ## 5. 整合測試：兩家 CLI 的問答往返
 

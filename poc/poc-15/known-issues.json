@@ -1,0 +1,8 @@
+{
+  "note": "The three problems planted in the PoC-15 change. This file is not given to the reviewer. The runner uses it for a first, heuristic match; the report states the final judgment.",
+  "issues": [
+    { "key": "logic", "symbol": "longest_line", "problem": "REQ-4: a final line without a newline is dropped; a single line without a newline raises ValueError." },
+    { "key": "security", "symbol": "count_file", "problem": "REQ-5: the path is concatenated into a shell command (command injection)." },
+    { "key": "scope", "symbol": "word_frequencies", "needs_scope_relation": "yes", "problem": "No requirement covers word_frequencies; docs/requirements.md says anything not listed is out of scope." }
+  ]
+}

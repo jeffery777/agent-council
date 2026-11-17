@@ -27,6 +27,12 @@ import json, os, signal, subprocess, sys, time
 here = os.path.dirname(os.path.abspath(__file__))
 if "--version" in sys.argv:
     print("0.0.0 (fake)"); sys.exit(0)
+if sys.argv[1:3] == ["auth", "status"]:
+    if os.path.exists(os.path.join(here, "auth-hangs")):
+        time.sleep(60)
+    provider = "other" if os.path.exists(os.path.join(here, "wrong-login")) else "firstParty"
+    print(json.dumps({"authMethod": "claude.ai", "apiProvider": provider, "email": "not-kept"}))
+    sys.exit(0)
 mode = open(os.path.join(here, "mode")).read().strip()
 late = os.path.join(here, "late-write")
 child = ("import signal,time\n"
@@ -134,6 +140,97 @@ class RunnerTest(unittest.TestCase):
         self.assertFalse(record["notes"]["process_group_stopped"])
         self.assertEqual(record["error_class"], "other")
         self.assertEqual(record["notes"]["test_repo_unchanged"], "unconfirmed")
+
+    def load_runner(self):
+        spec = importlib.util.spec_from_file_location("runner", RUNNER)
+        runner = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runner)
+        return runner
+
+    def test_stops_when_login_is_not_the_subscription(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = os.path.join(tmp, "claude")
+            with open(fake, "w") as fh:
+                fh.write(FAKE)
+            os.chmod(fake, 0o755)
+            for name in ("mode", "wrong-login"):
+                with open(os.path.join(tmp, name), "w") as fh:
+                    fh.write("normal")
+            # If the fake cannot run, PATH lookup could fall through to the real CLI.
+            check = subprocess.run([fake, "--version"], capture_output=True, text=True)
+            self.assertEqual(check.stdout.strip(), "0.0.0 (fake)")
+            env = dict(os.environ, PATH=tmp + os.pathsep + os.environ["PATH"])
+            env.pop("ANTHROPIC_API_KEY", None)
+            env.pop("ANTHROPIC_AUTH_TOKEN", None)
+            out = subprocess.run([sys.executable, RUNNER, "memory-default", "--model", "fake-model",
+                                  "--attempt", "0"], env=env, capture_output=True, text=True)
+        self.assertNotEqual(out.returncode, 0)
+        self.assertIn("subscription login", out.stderr)
+        self.assertEqual(out.stdout, "")  # no record: the CLI was not started
+        self.assertNotIn("not-kept", out.stderr)
+
+    def test_stops_when_the_login_query_hangs(self):
+        runner = self.load_runner()
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = os.path.join(tmp, "claude")
+            with open(fake, "w") as fh:
+                fh.write(FAKE)
+            os.chmod(fake, 0o755)
+            # If the fake cannot run, PATH lookup could fall through to the real CLI.
+            check = subprocess.run([fake, "--version"], capture_output=True, text=True)
+            self.assertEqual(check.stdout.strip(), "0.0.0 (fake)")
+            with open(os.path.join(tmp, "auth-hangs"), "w") as fh:
+                fh.write("yes")
+            env = dict(os.environ, PATH=tmp + os.pathsep + os.environ["PATH"])
+            started = time.monotonic()
+            with mock.patch.object(runner, "AUTH_STATUS_TIMEOUT", 1), \
+                    self.assertRaises(SystemExit) as stopped:
+                runner.subscription_login(env)
+            self.assertLess(time.monotonic() - started, 10)
+        self.assertIn("did not answer", str(stopped.exception.code))
+
+    def test_review_prompt_and_known_issue_match(self):
+        runner = self.load_runner()
+        target = {"base": "b" * 40, "head": "h" * 40, "diff": "+added line"}
+        with open(os.path.join(runner.POC, "poc-15", "review-task.md"), encoding="utf-8") as fh:
+            prompt = runner.fill_review_prompt(fh.read(), target)
+        self.assertNotIn("{{", prompt)
+        for value in target.values():
+            self.assertIn(value, prompt)
+        with open(os.path.join(runner.POC, "poc-15", "known-issues.json"), encoding="utf-8") as fh:
+            known = json.load(fh)
+
+        def finding(fid, text, relation="in-scope", severity="MUST-FIX"):
+            return {"id": fid, "severity": severity, "requirement_relation": relation,
+                    "file": "src/wordcount.py", "line": "1", "finding": text, "evidence": ""}
+
+        output = {"findings": [
+            finding("F-001", "longest_line drops the last line"),
+            finding("F-002", "word_frequencies has a typo"),  # named, but not as out of scope
+        ]}
+        self.assertEqual(runner.known_issues_found(output, known),
+                         {"logic": ["F-001"], "security": [], "scope": []})
+        output["findings"].append(finding("F-003", "word_frequencies is not required",
+                                          "no-requirement", "SCOPE-CREEP"))
+        self.assertEqual(runner.known_issues_found(output, known)["scope"], ["F-003"])
+        # Output that does not follow the schema must not stop the record from being written.
+        for malformed in (None, [1], "text", {"findings": None}, {"findings": [None, "x"]}):
+            self.assertEqual(runner.known_issues_found(malformed, known),
+                             {"logic": [], "security": [], "scope": []})
+
+    def test_review_schema_accepts_a_valid_output_and_rejects_a_bad_enum(self):
+        runner = self.load_runner()
+        with open(os.path.join(runner.POC, "poc-15", "output.schema.json"), encoding="utf-8") as fh:
+            schema = json.load(fh)
+        good = {"task_id": "poc-15", "reviewed_base": "b", "reviewed_head": "h",
+                "deviates_from_requirements": "yes", "summary": "s",
+                "findings": [{"id": "F-001", "severity": "MUST-FIX", "requirement_relation": "in-scope",
+                              "file": "f", "line": "", "finding": "x", "evidence": "y"}]}
+        self.assertEqual(runner.validate(good, schema), [])
+        bad = json.loads(json.dumps(good))
+        bad["findings"][0]["severity"] = "HIGH"
+        del bad["findings"][0]["evidence"]
+        self.assertEqual(len(runner.validate(bad, schema)), 2)
 
 
 if __name__ == "__main__":

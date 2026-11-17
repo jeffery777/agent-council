@@ -4,7 +4,8 @@
 Throwaway PoC code (M1 plan, rule 2). Standard library only.
 
 The script:
-  - refuses to run when an API key variable is present (plan rule 4);
+  - refuses to run when an API key variable is present (plan rule 4), or when
+    the CLI does not report the subscription login;
   - starts the CLI with a small, explicit environment, so that variables
     inherited from a parent agent session do not reach it;
   - enforces a timeout, and after every run (timeout or normal exit) stops
@@ -98,6 +99,16 @@ CASES = {
         "schema": "poc-06/output.schema.json",
         "flags": ["--tools", "Read,Write", "--strict-mcp-config", "--safe-mode"],
     },
+    # PoC-15: read-only review of the change that prepare-poc-15-change.sh
+    # committed to the test repository.
+    "poc-15": {
+        "poc_id": "PoC-15",
+        "prompt": "poc-15/review-task.md",
+        "schema": "poc-15/output.schema.json",
+        "flags": READ_ONLY,
+        "review": {"base": "main", "branch": "poc-15-change"},
+        "known_issues": "poc-15/known-issues.json",
+    },
 }
 
 BLOCKED_ENV = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")
@@ -114,6 +125,73 @@ def test_repo_path():
     if out.returncode != 0 or not os.path.isfile(os.path.join(path, ".poc-testrepo-marker")):
         sys.exit("test repository not found; create it first (see poc/README.md)")
     return path
+
+
+AUTH_STATUS_TIMEOUT = 30  # seconds
+
+
+def subscription_login(env):
+    """Ask the CLI how it is logged in. Stops unless it is the subscription login.
+
+    Only the two fields that name the login method are read and kept.
+    """
+    try:
+        out = subprocess.run(["claude", "auth", "status", "--json"], env=env, capture_output=True,
+                             text=True, check=False, timeout=AUTH_STATUS_TIMEOUT)
+    except (subprocess.TimeoutExpired, OSError):
+        sys.exit("`claude auth status --json` did not answer; not starting the CLI")
+    try:
+        status = json.loads(out.stdout)
+        seen = {"authMethod": str(status.get("authMethod")),
+                "apiProvider": str(status.get("apiProvider"))}
+    except (ValueError, AttributeError):
+        sys.exit("could not read `claude auth status --json`; not starting the CLI")
+    if seen != {"authMethod": "claude.ai", "apiProvider": "firstParty"}:
+        sys.exit(f"the CLI does not report the subscription login ({seen}); not starting it")
+    return seen
+
+
+def review_target(test_repo, review):
+    """Base and head of the change under review, and its diff. Stops when the
+    test repository is not on the prepared branch."""
+    def rev(name):
+        out = sh(["git", "rev-parse", "--verify", "--quiet", name], cwd=test_repo)
+        return out.stdout.strip()
+    base, head = rev(review["base"]), rev("refs/heads/" + review["branch"])
+    if not base or not head or rev("HEAD") != head:
+        sys.exit("the test repository is not on the prepared review branch; "
+                 "run poc/scripts/prepare-poc-15-change.sh first")
+    diff = sh(["git", "diff", "--no-ext-diff", "--no-textconv", "--no-color", base, head],
+              cwd=test_repo).stdout
+    if not diff.strip():
+        sys.exit("the diff under review is empty")
+    return {"base": base, "head": head, "diff": diff}
+
+
+def fill_review_prompt(template, target):
+    for key in ("base", "head", "diff"):
+        template = template.replace("{{" + key.upper() + "}}", target[key])
+    return template
+
+
+def known_issues_found(structured, known):
+    """Heuristic first match of the planted problems against the findings.
+
+    A problem counts as found when a finding names its symbol. The scope
+    problem also needs a finding that marks the symbol as outside the
+    requirements. The report states the final judgment.
+    """
+    found = {}
+    # The output may not follow the schema; the record must still be written.
+    findings = structured.get("findings") if isinstance(structured, dict) else None
+    findings = [f for f in findings if isinstance(f, dict)] if isinstance(findings, list) else []
+    for issue in known["issues"]:
+        hits = [f for f in findings if issue["symbol"] in json.dumps(f, ensure_ascii=False)]
+        if issue.get("needs_scope_relation") == "yes":
+            hits = [f for f in hits if f.get("requirement_relation") == "no-requirement"
+                    or f.get("severity") == "SCOPE-CREEP"]
+        found[issue["key"]] = sorted(str(f.get("id")) for f in hits)
+    return found
 
 
 def repo_state(path):
@@ -214,6 +292,10 @@ def main():
             prompt = fh.read()
     else:
         prompt = case["prompt_text"]
+    target = None
+    if "review" in case:
+        target = review_target(test_repo, case["review"])
+        prompt = fill_review_prompt(prompt, target)
     schema = None
     command = ["claude", "-p", "--model", args.model] + BASE_FLAGS + list(case["flags"])
     if "schema" in case:
@@ -241,6 +323,7 @@ def main():
 
     env = {k: os.environ[k] for k in PASSED_ENV if k in os.environ}
     env.update(case.get("env", {}))
+    login = subscription_login(env)
     version = sh(["claude", "--version"]).stdout.strip() or "unknown"
     before = repo_state(test_repo)
 
@@ -306,7 +389,18 @@ def main():
             ids = sorted(item["id"] for item in structured["requirements"])
             if ids != ["REQ-1", "REQ-2", "REQ-3"]:
                 format_errors.append(f"requirements ids are {ids}")
+        if target and not format_errors:
+            if (structured["reviewed_base"], structured["reviewed_head"]) != (target["base"], target["head"]):
+                format_errors.append("reviewed_base / reviewed_head differ from the commits given")
+            ids = [item["id"] for item in structured["findings"]]
+            if len(ids) != len(set(ids)):
+                format_errors.append("finding ids are not unique")
         format_valid = not format_errors
+
+    known_found = "not_applicable"
+    if "known_issues" in case:
+        with open(os.path.join(POC, case["known_issues"]), encoding="utf-8") as fh:
+            known_found = known_issues_found(structured, json.load(fh))
 
     denials = (result or {}).get("permission_denials") or []
     if timed_out:
@@ -344,6 +438,7 @@ def main():
             "permission_denials": [{"tool_name": d.get("tool_name")} for d in denials],
         },
         "loaded_config_summary": {
+            "auth_status_before_run": login,
             "api_key_source": (init or {}).get("apiKeySource", "unknown"),
             "plugins": [p.get("source") for p in (init or {}).get("plugins", [])]
             if init else "unknown",
@@ -370,6 +465,11 @@ def main():
             "format_errors": format_errors,
             "structured_output": structured,
             "result_text": str((result or {}).get("result", "")),
+            "reviewed": {"base": target["base"], "head": target["head"],
+                         "diff_sha256": hashlib.sha256(target["diff"].encode()).hexdigest()}
+            if target else "not_applicable",
+            "known_issues_found_heuristic": known_found,
+            "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
             "test_repo_head_before": before["head"],
             # Without a confirmed stop, the comparison proves nothing about later writes.
             "test_repo_unchanged": (before == after) if group_stopped else "unconfirmed",
