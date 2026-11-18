@@ -23,6 +23,7 @@ import uuid
 REPO = Path(__file__).resolve().parents[2]
 LOCAL = REPO / "poc/local/codex"
 CASES = {
+    "poc-15": ("PoC-15", "poc-15/review-task.md", "poc-15/output.schema.json"),
     "poc-04": ("PoC-04", "poc-04/prompt.md", "poc-04/output.schema.json"),
     "poc-06-read": ("PoC-06", "poc-06/read-task.md", "poc-06/output.schema.json"),
     "poc-06-write": ("PoC-06", "poc-06/write-task.md", "poc-06/output.schema.json"),
@@ -36,6 +37,7 @@ OVERRIDES = [
     "features.multi_agent=false", "features.multi_agent_v2=false",
     'web_search="disabled"', "project_doc_max_bytes=0",
 ]
+DOTENV_NAMES = frozenset({"NO_PROXY", "no_proxy"})
 ENV_NAMES = ("HOME", "PATH", "LANG", "LC_ALL", "TMPDIR", "SHELL")
 
 
@@ -60,21 +62,55 @@ def environment():
     dotenv = home / ".env"
     if dotenv.exists():
         for line in dotenv.read_text().splitlines():
-            line = line.strip().removeprefix("export ").strip()
-            if line and not line.startswith("#") and "=" in line:
-                if api_variable(line.split("=", 1)[0].strip()):
-                    raise RuntimeError("API-key variable in Codex dotenv")
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            match = re.fullmatch(r"(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \t]*=.*", line)
+            if not match:
+                raise RuntimeError("unrecognized entry in Codex dotenv")
+            name = match.group(1)
+            if api_variable(name):
+                raise RuntimeError("API-key variable in Codex dotenv")
+            if name not in DOTENV_NAMES:
+                raise RuntimeError("non-allowlisted variable in Codex dotenv")
     return env
 
 
-def test_repo_path(env):
-    out = command([str(REPO / "poc/scripts/create-test-repo.sh"), "--print-path"], env=env)
-    path = Path(out.stdout.strip()).resolve()
+def test_repo_path(env, explicit=None):
+    if explicit is None:
+        out = command([str(REPO / "poc/scripts/create-test-repo.sh"), "--print-path"], env=env)
+        explicit = out.stdout.strip()
+    path = Path(explicit).resolve()
     if not (path / ".poc-testrepo-marker").is_file() or not (path / ".git").is_dir():
         raise RuntimeError("existing local test repository not found; do not create it")
     if command(["git", "remote"], cwd=path, env=env).stdout.strip():
         raise RuntimeError("test repository has a remote")
     return path
+
+
+def review_target(path, env):
+    """Bind the supplied diff to the prepared branch; never pass the answer key."""
+    def rev(name):
+        return command(["git", "rev-parse", "--verify", name], cwd=path, env=env).stdout.strip()
+    base, head = rev("refs/heads/main"), rev("refs/heads/poc-15-change")
+    branch = command(["git", "symbolic-ref", "--short", "HEAD"], cwd=path, env=env).stdout.strip()
+    if branch != "poc-15-change" or rev("HEAD") != head:
+        raise RuntimeError("test repository is not on the prepared review branch")
+    diff = command(["git", "diff", "--no-ext-diff", "--no-textconv", "--no-color", base, head],
+                   cwd=path, env=env).stdout
+    if not diff.strip():
+        raise RuntimeError("empty review diff")
+    return {"base": base, "head": head, "diff": diff}
+
+
+def review_format_errors(structured, target):
+    errors = []
+    if structured["reviewed_base"] != target["base"] or structured["reviewed_head"] != target["head"]:
+        errors.append("reviewed commits differ from supplied commits")
+    ids = [f["id"] for f in structured["findings"]]
+    if len(ids) != len(set(ids)):
+        errors.append("finding IDs are not unique")
+    return errors
 
 
 def repo_state(path, env=None):
@@ -279,19 +315,26 @@ def main():
     parser.add_argument("--attempt", type=int, required=True)
     parser.add_argument("--timeout", type=float, default=180)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--test-repo", type=Path, help="explicit existing local PoC test repository")
     args = parser.parse_args()
     if args.attempt < 1 or args.timeout <= 0:
         parser.error("attempt and timeout must be positive")
     env = environment()
-    testrepo = test_repo_path(env)
+    testrepo = test_repo_path(env, args.test_repo)
     poc_id, prompt_path, schema_path = CASES[args.case]
     prompt = (REPO / "poc" / prompt_path).read_text()
     schema_file = REPO / "poc" / schema_path
+    target = review_target(testrepo, env) if args.case == "poc-15" else None
+    if target:
+        for key in ("base", "head", "diff"):
+            prompt = prompt.replace("{{" + key.upper() + "}}", target[key])
     argv = ["codex", "exec", "--model", args.model, "--sandbox", "read-only",
             "--json", "--color", "never", "--ephemeral", "--ignore-user-config",
             "--ignore-rules", "--strict-config"]
     for value in OVERRIDES:
         argv += ["-c", value]
+    if target:
+        argv += ["-c", 'model_reasoning_effort="medium"']
     argv += ["--output-schema", str(schema_file)]
     if args.dry_run:
         print(redact(shlex.join(argv + ["--output-last-message", "<repo>/poc/local/codex/<run>/final.json", "-"]), testrepo))
@@ -306,6 +349,9 @@ def main():
     folder = LOCAL / run_id
     folder.mkdir(parents=True, exist_ok=False)
     (folder / "auth-status.txt").write_text(auth.stdout + auth.stderr)
+    (folder / "prompt.md").write_text(prompt)
+    if target:
+        (folder / "diff.patch").write_text(target["diff"])
     before = repo_state(testrepo, env)
     if before["status"]:
         raise RuntimeError("test repository is not clean; do not recreate it")
@@ -318,6 +364,9 @@ def main():
     final_path = folder / "final.json"
     final = final_path.read_text() if final_path.exists() else ""
     obs = observations(raw, final, json.loads(schema_file.read_text()), args.case)
+    if target and obs["output_format_valid"]:
+        obs["format_errors"] += review_format_errors(obs["structured_output"], target)
+        obs["output_format_valid"] = not obs["format_errors"]
     classification = error_class(outcome, obs, stderr)
     work_items = [i for i in obs["tools"] if i.get("type") in {"command_execution", "file_change"}]
     record = {
@@ -339,12 +388,16 @@ def main():
         "started_evidence": work_items or harness_denials(stderr) or ("final agent_message only" if obs["messages"] else "none"),
         "error_class": classification,
         "notes": {**outcome, "before": before, "after": after,
+                  "runner_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                   "test_repo_unchanged": before == after if after else "unconfirmed",
                   "structured_output": obs["structured_output"], "format_errors": obs["format_errors"],
                   "malformed_jsonl_lines": obs["malformed_jsonl_lines"],
                   "event_types": sorted(set(e["type"] for e in obs["events"])),
                   "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
-                  "schema_sha256": hashlib.sha256(schema_file.read_bytes()).hexdigest()},
+                  "schema_sha256": hashlib.sha256(schema_file.read_bytes()).hexdigest(),
+                  "review": ({"base": target["base"], "head": target["head"],
+                              "diff_sha256": hashlib.sha256(target["diff"].encode()).hexdigest()}
+                             if target else None)},
     }
     (folder / "record.json").write_text(redact(json.dumps(record, ensure_ascii=False, indent=2), testrepo) + "\n")
     print(json.dumps({"run_id": run_id, "exit_code": outcome["exit_code"],
@@ -352,7 +405,7 @@ def main():
                       "output_format_valid": obs["output_format_valid"],
                       "process_group_stopped": outcome["process_group_stopped"],
                       "test_repo_unchanged": record["notes"]["test_repo_unchanged"]}))
-    return 0 if classification in {"none", "approval_blocked"} and before == after else 1
+    return 0 if (classification == "none" if target else classification in {"none", "approval_blocked"}) and before == after else 1
 
 
 if __name__ == "__main__":
