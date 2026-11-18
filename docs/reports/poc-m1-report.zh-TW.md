@@ -1,8 +1,8 @@
 # Agent Council：M1 雙 CLI PoC 報告
 
-狀態：進行中 · 2026-11-16 · 對應 [M1 雙 CLI PoC 計畫](../plans/poc-plan-m1.zh-TW.md)（2026-11-10 草案）與規格 v0.6
+狀態：進行中 · 2026-11-18 · 對應 [M1 雙 CLI PoC 計畫](../plans/poc-plan-m1.zh-TW.md)（2026-11-10 草案）與規格 v0.6
 
-目前已填：環境紀錄、PoC-04 與 PoC-06（M1-2），以及 PoC-15 中 Claude 的部分（M1-3）。其餘各節的「待填」不代表任何結果。
+目前已填：環境紀錄、PoC-04 與 PoC-06（M1-2），以及 PoC-15 的 Claude 與 Codex 部分（M1-3）。其餘各節的「待填」不代表任何結果。
 
 ## 1. 填寫規則
 
@@ -39,7 +39,7 @@
 | PoC-06 headless 不卡在核准提示 | 通過。Claude、Codex 的部分均通過。 | 2026-11-15 | Codex 讀檔不需人介入，patch 寫入請求被拒後指令會結束，符合計畫第 5 節的通過條件；直接工具名稱、精確目標及不經 shell 的路徑仍列為限制。adapter 須同時檢查 JSONL、stderr 與 repo 比對。 |
 | PoC-13 投遞到 Claude Code 的既有 session | 待填 | | |
 | PoC-14 `codex queue` 投遞到既有 session | 待填 | | |
-| PoC-15 跨廠商的唯讀審查 | Claude 的部分：通過。Codex 的部分：部分通過。 | 2026-11-16（Claude）、2026-11-17（Codex） | 兩邊三次輸出均符合格式且找到三個已知問題；Codex 的完整實際權限邊界仍未證實，整項不記為通過。 |
+| PoC-15 跨廠商的唯讀審查 | 通過。Claude、Codex 的部分均通過。 | 2026-11-16（Claude）、2026-11-17（Codex） | 兩邊三次輸出均符合格式且找到三個已知問題；Codex 觀察到暫存檔寫入被拒且 repo 前後相同，依維護者審查後決定記為通過。未取得 harness 回報的工具與權限清單仍列為限制；兩邊均未證明所有通道唯讀。 |
 | 整合測試：兩家 CLI 的問答往返 | 待填 | | |
 
 結論填「通過」、「部分通過」、「不通過」或「未完成」。「未完成」要說明原因（計畫第 7、9 節）。
@@ -366,12 +366,12 @@
   - 三次都有一個 `rate_limit_event`，狀態是 `allowed`。沒有觸及用量上限。
 - 結論（通過、部分通過、不通過）：Claude 的部分通過。三次輸出都符合格式；有實際生效權限的證據（init 事件的工具清單與權限模式）；測試 repo 沒有被修改；超出需求範圍的變更三次都被指出。
 - 對規格的影響：
-  - 規格 PoC-15：`claude -p` 可以在唯讀設定下審查一份 diff 並回傳固定格式的結果。整項結論待 Codex 的部分。
+  - 規格 PoC-15：`claude -p` 可以在唯讀設定下審查一份 diff 並回傳固定格式的結果。整項結論見結果總表。
   - FR-36：這三次中，「是否偏離需求」能以一個欄位回報，各項發現也都能以 `id`、`severity`、`requirement_relation` 表達。提議（待 M2 決定）：規格第 14 節關於結果格式如何對齊 findings 欄位的未決問題，可以沿用這組欄位，不另立分類；disposition 由接收方填寫。依據只有一份 diff、一個模型的三次執行。
   - 審查方在唯讀設定下拿不到 Git 工具。需要它自己取得 diff 時，要由啟動方把 diff 放進輸入，或另外提供唯讀的 Git 查詢方式。
   - 計畫要求每項發現有「穩定的 ID」，沒有定義穩定的範圍。這次採用的解讀是「單次輸出內唯一」，通過的判定也依這個解讀。維護者於 2026-11-16 在開發對話中確認這個解讀即可。發現的 `id` 只在單次輸出內穩定。同一個問題在三次中的編號不同（例如邏輯錯誤是 `F-003`、`F-003`、`F-002`）。需要跨輪次追蹤同一項發現時，不能直接比對 `id`。
   - M2 的未決事項（維護者於 2026-11-16 決定不在 PoC-15 加測）：審查進入下一輪時，同一項發現如何沿用同一個 ID。提議的做法是由接收方在第一輪後替每項發現配固定的 ID，下一輪的輸入附上這份清單，要求審查方逐項回報狀態，新發現另外編號。這個做法沒有測試。它併入規格第 14 節關於結果格式如何對齊 findings 欄位的未決問題。
-- 給 engineering-workflow-core 的資訊（跨廠商 reviewer 路徑實際能提供的證據，計畫第 8 節）：以下只涵蓋 `claude -p`，Codex 的部分完成後補齊。
+- 給 engineering-workflow-core 的資訊（跨廠商 reviewer 路徑實際能提供的證據，計畫第 8 節）：以下只涵蓋 `claude -p`；`codex exec` 的對應資訊見 Codex 的部分。
   - 可以取得的證據：
     - init 事件回報的工具清單、權限模式、MCP server 清單與模型。這些是 harness 回報的觀察值，不是從旗標推定的。
     - `result` 事件的 `permission_denials`（被拒絕的工具呼叫）與實際使用的模型。
@@ -394,6 +394,7 @@
 
 - 執行日期與環境：2026-11-17，`codex-cli 0.169.0`，macOS arm64。任務實作基準是 `b7ca30284852f3465ffcdb6267a0e0f5cfc937b8`；規格 v0.6、M1 計畫 2026-11-10 草案；契約 m1-r2 加共用 review schema。請求模型 `gpt-6.1-sol`、reasoning effort `medium`；三次事件均未回報實際模型，記為未知。
 - 事前條件與修正：
+  - reasoning effort `medium` 是維護者事前同意的設定，屬於與 Claude 那三次的條件差異：Codex 明確設定 `medium`，Claude 沒有設定 effort。這是執行條件的紀錄，不是兩者推理強度相同的證明。
   - 維護者於開發對話同意最多三次、每次 180 秒、不自動重試，以及測試 repo 外的 worktree／Git metadata、指定腳本與報告、`poc/local/`、官方 CLI 必要狀態／快取／helper 暫存及訂閱憑證刷新。這是允許範圍，不代表已逐項觀察所有寫入。
   - 執行前先修正 Issue #19 第 1 項 PR18-SDS-01：Codex dotenv 只允許 `NO_PROXY`、`no_proxy`；其他名稱、憑證名稱與無法識別的非空非註解行均在任何 Git／CLI 命令前拒絕，不輸出或保存值。15 項離線測試通過，包含非憑證變數與 malformed 行的負向測試；這不證明 shell profile 或所有 CLI 設定來源都受控。
   - 先讀 `codex --help`、`codex exec --help`、`codex login --help` 與 `codex login status --help`，再使用對應命令。每輪以官方 CLI 確認 `Logged in using ChatGPT`；子環境僅保留 `HOME`、`PATH`、`LANG`、`LC_ALL`、`TMPDIR`、`SHELL` 中存在者，不傳 API-key 變數、不讀取或複製憑證。
@@ -401,7 +402,7 @@
   - 新 worktree 的 `poc/local/bootstrap/` 是固定於任務基準的獨立 clone。在其中執行原始 `create-test-repo.sh` 與 `prepare-poc-15-change.sh`，讓原腳本依其 common Git directory 產生本次專用測試 repo；未沿用或重建既有共用測試 repo。
   - 得到 base `6cc46aa598a7a63957485d087a787c39c386e0cc`、head `d0c104fea561442870968015ea3de270460f97d0`，與 Claude 相同；分支 `poc-15-change`，乾淨且無 remote。三個共用輸入／格式／已知問題檔案均未修改。
   - diff 固定用 `git diff --no-ext-diff --no-textconv --no-color <base> <head>`，再填入原模板三個佔位符。三輪保存的 prompt、diff 均逐位元相同；SHA-256：prompt `2d40a59e4ad899964f2531ed24a2e832f05639a5168ffd76af563ed3a027c0b0`、diff `be40eb31a073664637a96b90cea757e5c80be71081bc40bf5923390ada4c4f17`、schema `67c69dae74a494a704e493a1d522bf39406eef6955e0812a85211c6d16d62784`。
-  - `known-issues.json` 不由 runner 讀取，也沒有放進測試 repo 或提示。三輪工具事件未顯示讀取該檔；第 1 輪列出測試 repo 檔案並匯入 `src/wordcount.py`，第 2、3 輪另讀需求、程式、測試與 README。這不是對所有隱含載入及檔案系統讀取的完整追蹤。
+  - `known-issues.json` 不由 runner 讀取，也沒有放進測試 repo 或提示。已知問題清單與測試 repo 位於同一個 worktree，審查方的 shell 可能讀得到（未驗證）；三次的工具指令沒有讀取它。三輪工具事件未顯示讀取該檔；第 1 輪列出測試 repo 檔案並匯入 `src/wordcount.py`，第 2、3 輪另讀需求、程式、測試與 README。這不是對所有隱含載入及檔案系統讀取的完整追蹤。
 - 實際命令：外層依序執行下列命令的 `--attempt 1`、`2`、`3`，每輪成功才啟動下一輪；沒有額外模型探測或重試。`<repo>` 代表本次獨立 worktree，`<testrepo>` 是其 `poc/local/` 下的專用測試 repo。
 
   ```text
@@ -441,7 +442,7 @@
   - 本次可確認 shell 可用、列出的工具實際完成，以及暫存寫入遭拒／無可用暫存目錄。沒有受審檔案寫入成功的事件，也沒有 repo 變動；但 JSONL 沒有完整工具 inventory、完整權限模式或設定載入清單，因此不能由 `--sandbox read-only`、成功回覆或前後 hash 推定所有通道技術唯讀。上述失敗也沒有獨立隔離為單一權限控制的效果。
   - 關閉記憶、專案指示、rules、plugins、hooks、協作與 web search 都是啟動請求；這次沒有取得完整實際載入清單，也沒有追加 canary。`/bin/zsh -lc` 可能讀取 shell profile 的限制仍沿用 Issue #19 第 10 項；未擴修或宣稱已驗證。
   - 一份共用 fixture、單一請求模型、三次；不代表一般程式的審查品質。工具事件與快照沒有涵蓋主機所有檔案、先改再還原、原生載入或外部服務的完整行為。
-- 結論：Codex 的部分為「部分通過」。三次跨廠商審查、原 schema 接受、已知問題辨識、開始工作及 repo 未變的紀錄均已取得；完整實際權限邊界仍未證實，因此不宣稱滿足全部通過條件，也不記整項 PoC-15 已通過。依計畫暫保留由人啟動該方向審查。
+- 結論：Codex 的部分為「通過」。三次輸出均符合原 schema；有暫存檔寫入被拒的行為證據，測試 repo 前後相同，超出需求範圍的變更三次都被指出。此結論依維護者於 2026-11-18 的審查後決定修正，與 PoC-06 的處理一致；沒有新增實測或權限探測。沒有取得 harness 回報的工具與權限清單、完整實際權限邊界仍未證實，均列為限制；兩邊均未證明所有通道唯讀。
 - 對規格與 engineering-workflow-core 的資訊：FR-36 的偏離欄位、逐項需求關係與單次唯一 ID 在此 fixture 可用；D-25 的 adapter 應同時保存 CLI stderr、工具結果、最終 JSON、固定 commit／輸入 hash 與 repo 前後證據，並容許實際模型／權限未知。這不是上游 reviewer 路徑資格或正式 findings 契約對齊的完成證明。
 - 本機證據：三份原始 JSONL、stderr、最終 JSON、prompt、diff 與 m1-r2 record 保存在 `poc/local/codex/`，不進版控。執行使用的 runner SHA-256 為 `7aa41ead9b71fa63b866a8126b2945651f7a86af4f9a79cb51e0f9b197b458c6`；公開文字另作敏感資料檢查，不直接貼原始紀錄。
 - 寫作核對：僅補本節、總表對應欄與獲准的 Claude 兩項證據補充；逐項對照本機事件、最終 findings 與前後 hash，保留觀察、推論與未知，不宣稱 STE 符合性。Lesson candidates：none。
