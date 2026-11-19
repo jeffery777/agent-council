@@ -41,11 +41,21 @@ hook="$target/.claude/hooks/poc13-hook.py"
 channel="$target/.claude/hooks/poc13-channel.py"
 mcp="$target/.mcp.json"
 
-# settings.local.json and .mcp.json are removed or replaced only when this
-# script wrote them.
-ours() { [ ! -e "$1" ] || grep -q "$2" "$1"; }
-if ! ours "$settings" 'poc13-hook.py' || ! ours "$mcp" 'poc13-channel.py'; then
-  echo "settings.local.json or .mcp.json exists and is not from this script; not touching anything" >&2
+# settings.local.json and .mcp.json are replaced or removed as whole files.
+# That is safe only while each one is byte-for-byte a file this script
+# installs. Anything else (for example a permission rule that Claude Code
+# added to settings.local.json) stops the script before it writes.
+ours() {
+  local file="$1" candidate
+  shift
+  [ -e "$file" ] || return 0
+  for candidate in "$@"; do
+    cmp -s "$file" "$candidate" && return 0
+  done
+  return 1
+}
+if ! ours "$settings" "$source_dir"/settings.*.json || ! ours "$mcp" "$source_dir/mcp.channel.json"; then
+  echo "settings.local.json or .mcp.json differs from the files this script installs; not touching anything" >&2
   exit 1
 fi
 

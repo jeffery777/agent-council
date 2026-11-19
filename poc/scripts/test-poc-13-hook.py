@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""Offline tests for poc/poc-13/hook.py. They start no CLI and no session."""
+"""Offline tests for the PoC-13 hook, channel and install script.
+
+They start no CLI and no session, and they do not touch the real test repo:
+the install script runs in a throwaway copy with its own fake test repo.
+"""
 
 import json
 import os
 import pathlib
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -148,6 +153,75 @@ class HookTest(unittest.TestCase):
                               capture_output=True, text=True, timeout=20)
         self.assertEqual((done.returncode, done.stdout), (0, ""))
         self.assertFalse(self.root.exists())
+
+
+class PrepareTest(unittest.TestCase):
+    """prepare-poc-13.sh in a sandbox: <tmp>/main is a copy of the scripts,
+    <tmp>/agent-council-poc-testrepo is a fake test repo."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        base = pathlib.Path(self.tmp.name)
+        poc = HOOK.parent.parent
+        for name in ("scripts", "poc-13", "fixtures"):
+            shutil.copytree(poc / name, base / "main" / "poc" / name)
+        self.repo = base / "agent-council-poc-testrepo"
+        self.repo.mkdir()
+        (self.repo / ".poc-testrepo-marker").touch()
+        env = {"PATH": os.environ["PATH"], "GIT_CONFIG_GLOBAL": os.devnull,
+               "GIT_CONFIG_NOSYSTEM": "1"}
+        for where in (base / "main", self.repo):
+            subprocess.run(["git", "init", "-q", str(where)], env=env, check=True,
+                           capture_output=True)
+        self.env = env
+        self.script = base / "main" / "poc" / "scripts" / "prepare-poc-13.sh"
+        self.settings = self.repo / ".claude" / "settings.local.json"
+        self.mcp = self.repo / ".mcp.json"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def prepare(self, profile):
+        return subprocess.run([str(self.script), profile], env=self.env,
+                              capture_output=True, text=True, timeout=30)
+
+    def test_profiles_switch_and_remove_cleanly(self):
+        self.assertEqual(self.prepare("channel").returncode, 0)
+        self.assertTrue(self.mcp.exists())
+        self.assertEqual(self.prepare("rewake").returncode, 0)
+        self.assertFalse(self.mcp.exists())
+        self.assertEqual((self.repo / ".poc-13" / "profile").read_text().strip(), "rewake")
+        self.assertEqual(self.prepare("remove").returncode, 0)
+        self.assertFalse(self.settings.exists())
+        self.assertFalse((self.repo / ".poc-13" / "profile").exists())
+
+    def test_edited_settings_are_neither_replaced_nor_removed(self):
+        self.assertEqual(self.prepare("inject").returncode, 0)
+        edited = json.loads(self.settings.read_text())
+        edited["permissions"] = {"deny": ["Bash(rm:*)"]}  # the PoC hooks stay in place
+        self.settings.write_text(json.dumps(edited, indent=2) + "\n")
+        before = self.settings.read_bytes()
+        for profile in ("rewake", "channel", "remove"):
+            self.assertEqual(self.prepare(profile).returncode, 1, profile)
+            self.assertEqual(self.settings.read_bytes(), before, profile)
+        self.assertFalse(self.mcp.exists())
+
+    def test_edited_mcp_config_is_neither_replaced_nor_removed(self):
+        self.assertEqual(self.prepare("channel").returncode, 0)
+        edited = json.loads(self.mcp.read_text())
+        edited["mcpServers"]["other"] = {"command": "true"}  # poc13 stays in place
+        self.mcp.write_text(json.dumps(edited, indent=2) + "\n")
+        before = (self.mcp.read_bytes(), self.settings.read_bytes())
+        for profile in ("inject", "channel", "remove"):
+            self.assertEqual(self.prepare(profile).returncode, 1, profile)
+            self.assertEqual((self.mcp.read_bytes(), self.settings.read_bytes()), before, profile)
+
+    def test_files_from_someone_else_stop_install_and_remove(self):
+        self.settings.parent.mkdir()
+        self.settings.write_text("{}\n")
+        for profile in ("inject", "remove"):
+            self.assertEqual(self.prepare(profile).returncode, 1, profile)
+        self.assertEqual(self.settings.read_text(), "{}\n")
 
 
 if __name__ == "__main__":

@@ -91,11 +91,11 @@ poc/scripts/prepare-poc-13.sh remove
     - session 結束時 Claude Code 是否會終止等待程式，尚未驗證。等待程式發現啟動它的行程不在時，會記下 `orphaned` 並結束，不取走訊息。測「已關閉」前，先確認事件紀錄中最後一個等待程式已結束。
   - `channel`：一個不依賴套件的最小 MCP server，把訊息以 `notifications/claude/channel` 送出。官方文件要求使用 MCP SDK；手寫的 server 是否被接受，是這個 PoC 要觀察的事。
 - 每則訊息要求 session 只回覆 `ACK <編號>`。「session 是否開始新的回合」依事件紀錄判定：投遞之後出現新的回合事件，而且回覆中有對應的編號。腳本的結束碼不算證據（FR-22）。
-- 安裝腳本只寫入測試 repo：`.claude/` 下的 hook 與 `settings.local.json`、`.mcp.json`（只有 channel 那一組）、`.poc-13/`，並把這些路徑加進測試 repo 的 `.git/info/exclude`。測試 repo 已有不是本腳本寫的 `settings.local.json` 或 `.mcp.json` 時，安裝與移除都會停止，不修改任何檔案。
+- 安裝腳本只寫入測試 repo：`.claude/` 下的 hook 與 `settings.local.json`、`.mcp.json`（只有 channel 那一組）、`.poc-13/`，並把這些路徑加進測試 repo 的 `.git/info/exclude`。`settings.local.json` 與 `.mcp.json` 是整份替換或刪除的；所以只要其中一份與本腳本安裝的檔案不是逐位元相同（例如 Claude Code 在裡面加了一條權限規則），安裝與移除都會停止，不修改任何檔案。這時由人確認內容後手動處理。
 - 投遞腳本會先確認目前安裝的那一組設定與收件匣相符；不相符時停止，不投遞。
 - 事件紀錄在 `<testrepo>/.poc-13/events.jsonl`，內容含 session ID，以及提示與回覆的前 300 個字，只留在本機。寫入報告前要人工移除識別資料。
 - 開啟互動 session 會寫入使用者層級的狀態檔，也會使用訂閱用量。執行前先取得維護者同意。
-- `poc/scripts/test-poc-13-hook.py` 離線測試 hook 與 channel 的程式，不啟動 CLI，也不碰測試 repo。
+- `poc/scripts/test-poc-13-hook.py` 離線測試 hook、channel 與安裝腳本，不啟動 CLI，也不碰測試 repo；安裝腳本在暫存的副本中執行。
 
 ## 測試 repo
 
