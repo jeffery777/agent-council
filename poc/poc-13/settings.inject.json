@@ -1,0 +1,64 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/.claude/hooks/poc13-hook.py\"; [ -f \"$f\" ] || exit 0; exec python3 \"$f\" inject"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/.claude/hooks/poc13-hook.py\"; [ -f \"$f\" ] || exit 0; exec python3 \"$f\" inject"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/.claude/hooks/poc13-hook.py\"; [ -f \"$f\" ] || exit 0; exec python3 \"$f\" inject"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/.claude/hooks/poc13-hook.py\"; [ -f \"$f\" ] || exit 0; exec python3 \"$f\" inject"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/.claude/hooks/poc13-hook.py\"; [ -f \"$f\" ] || exit 0; exec python3 \"$f\" inject"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/.claude/hooks/poc13-hook.py\"; [ -f \"$f\" ] || exit 0; exec python3 \"$f\" inject"
+          }
+        ]
+      }
+    ]
+  }
+}

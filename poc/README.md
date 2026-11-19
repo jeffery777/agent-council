@@ -29,6 +29,9 @@
 | `poc-06/` | PoC-06 的讀檔工作（`read-task.md`）、寫檔嘗試（`write-task.md`）與輸出格式定義。兩家 CLI 使用同一份。 |
 | `poc-15/` | PoC-15 的審查工作（`review-task.md`）與輸出格式定義，兩家 CLI 使用同一份；受審的變更內容（`change/`，其中刻意含有不安全的程式碼，不可複製使用）；埋入的三個已知問題（`known-issues.json`，不交給審查方）。 |
 | `scripts/prepare-poc-15-change.sh` | 把 `poc-15/change/` 的內容提交到測試 repo 的 `poc-15-change` 分支。 |
+| `poc-13/` | PoC-13 的 hook（`hook.py`）、自訂 channel（`channel.py`），以及三組設定：hooks 注入（`settings.inject.json`）、`asyncRewake`（`settings.rewake.json`）、自訂 channel（`settings.channel.json` 與 `mcp.channel.json`）。 |
+| `scripts/prepare-poc-13.sh` | 把 PoC-13 的一組設定裝進測試 repo，或移除。 |
+| `scripts/poc-13-send.py` | 從 session 外部投遞一則 PoC-13 的測試訊息。 |
 | `scripts/run-claude-headless.py` | 執行一次 `claude -p`，並依契約 m1-r2 寫出一筆結果紀錄。 |
 | `local/` | 本機產生的檔案（SQLite 檔、執行結果的暫存）。這個目錄不進版本控制。 |
 
@@ -66,6 +69,33 @@ poc/scripts/run-claude-headless.py poc-15 --model <model> --attempt 1
 - 腳本只寫入測試 repo，並讓測試 repo 停在 `poc-15-change` 分支。PoC-04、PoC-06 的案例要在初始內容上執行；執行前先切回：`git -C <testrepo> switch main`。
 - 審查的輸入是 `review-task.md`。執行腳本把其中的 `{{BASE}}`、`{{HEAD}}`、`{{DIFF}}` 換成測試 repo 的兩個 commit ID 與 `git diff` 的輸出，再由 stdin 傳入。兩家 CLI 用同樣的方式產生輸入。
 - 腳本依 `known-issues.json` 對輸出做第一次比對（發現中是否提到對應的函式名稱）。這只是初步比對；是否算找到，以報告中的人工判定為準。
+
+## PoC-13：投遞到既有的互動 session
+
+```bash
+# 把一組設定裝進測試 repo：inject、rewake 或 channel。一次只裝一組。
+poc/scripts/prepare-poc-13.sh inject
+
+# 從外部投遞一則訊息。第一個參數是 inbox、rewake 或 channel，對應上面三組設定。
+poc/scripts/poc-13-send.py inbox A1
+
+# 移除 hook 與設定。事件紀錄保留。先關閉被測的 session，再切換設定或移除。
+poc/scripts/prepare-poc-13.sh remove
+```
+
+- 被測的 session 由維護者在終端機開啟：在測試 repo 中執行 `claude`。channel 那一組要加上 `--dangerously-load-development-channels server:poc13`。
+- 三組設定對應計畫的三種機制：
+  - `inject`：hook 在 SessionStart、UserPromptSubmit、PostToolUse、Stop 觸發時，把收件匣的訊息交給 session。
+  - `rewake`：SessionStart 與 Stop 觸發時啟動 `asyncRewake` 的等待程式；訊息出現時以結束碼 2 結束。同一時間只保留一個等待程式，後來的會記下 `skipped` 後結束。
+    - 等待程式只等 840 秒（hook 的 `timeout` 是 900 秒），逾時記下 `expired`。測 idle 時，要在最後一次 SessionStart 或 Stop 之後 14 分鐘內投遞；判定前先確認事件紀錄在投遞前沒有 `expired`。
+    - session 結束時 Claude Code 是否會終止等待程式，尚未驗證。等待程式發現啟動它的行程不在時，會記下 `orphaned` 並結束，不取走訊息。測「已關閉」前，先確認事件紀錄中最後一個等待程式已結束。
+  - `channel`：一個不依賴套件的最小 MCP server，把訊息以 `notifications/claude/channel` 送出。官方文件要求使用 MCP SDK；手寫的 server 是否被接受，是這個 PoC 要觀察的事。
+- 每則訊息要求 session 只回覆 `ACK <編號>`。「session 是否開始新的回合」依事件紀錄判定：投遞之後出現新的回合事件，而且回覆中有對應的編號。腳本的結束碼不算證據（FR-22）。
+- 安裝腳本只寫入測試 repo：`.claude/` 下的 hook 與 `settings.local.json`、`.mcp.json`（只有 channel 那一組）、`.poc-13/`，並把這些路徑加進測試 repo 的 `.git/info/exclude`。`settings.local.json` 與 `.mcp.json` 是整份替換或刪除的；所以只要其中一份與本腳本安裝的檔案不是逐位元相同（例如 Claude Code 在裡面加了一條權限規則），安裝與移除都會停止，不修改任何檔案。這時由人確認內容後手動處理。
+- 投遞腳本會先確認目前安裝的那一組設定與收件匣相符；不相符時停止，不投遞。
+- 事件紀錄在 `<testrepo>/.poc-13/events.jsonl`，內容含 session ID，以及提示與回覆的前 300 個字，只留在本機。寫入報告前要人工移除識別資料。
+- 開啟互動 session 會寫入使用者層級的狀態檔，也會使用訂閱用量。執行前先取得維護者同意。
+- `poc/scripts/test-poc-13-hook.py` 離線測試 hook、channel 與安裝腳本，不啟動 CLI，也不碰測試 repo；安裝腳本在暫存的副本中執行。
 
 ## 測試 repo
 
