@@ -1,8 +1,8 @@
 # Agent Council：M1 雙 CLI PoC 報告
 
-狀態：進行中 · 2026-11-18 · 對應 [M1 雙 CLI PoC 計畫](../plans/poc-plan-m1.zh-TW.md)（2026-11-10 草案）與規格 v0.6
+狀態：進行中 · 2026-11-19 · 對應 [M1 雙 CLI PoC 計畫](../plans/poc-plan-m1.zh-TW.md)（2026-11-10 草案）與規格 v0.6
 
-目前已填：環境紀錄、PoC-04 與 PoC-06（M1-2），以及 PoC-15 的 Claude 與 Codex 部分（M1-3）。其餘各節的「待填」不代表任何結果。
+目前已填：環境紀錄、PoC-04 與 PoC-06（M1-2），PoC-15 的 Claude 與 Codex 部分（M1-3），以及 PoC-13（M1-4 的 Claude 部分）。其餘各節的「待填」不代表任何結果。
 
 ## 1. 填寫規則
 
@@ -20,11 +20,14 @@
 | 項目 | 紀錄 | 記錄日期與來源 |
 | --- | --- | --- |
 | 作業系統與版本 | macOS 27.2（build 26B123），arm64 | 2026-11-15，`sw_vers` 與 `uname -m` |
+| 作業系統與版本（2026-11-19 起） | macOS 27.2.1（build 26B131），arm64 | 2026-11-19，`sw_vers` 與 `uname -m` |
 | Claude Code CLI 的版本 | 2.1.312 | 2026-11-15，`claude --version` |
+| Claude Code CLI 的版本（PoC-13 的被測 session） | 2.1.328 | 2026-11-19，自訂 channel 收到的 `initialize` 請求中的 client 資訊。這是維護者終端機上的 `claude`。同一天在桌面版這一側執行 `claude --version` 得到 2.1.312；兩者是否為不同的安裝，未確認。 |
 | Codex CLI 的版本 | codex-cli 0.169.0 | 2026-11-15，`codex --version` |
 | Claude Code 的登入方式 | 訂閱登入：`authMethod` 為 `claude.ai`，`apiProvider` 為 `firstParty`。環境中沒有 `ANTHROPIC_API_KEY`。 | 2026-11-15，`claude auth status --json`（只取這兩個欄位）與環境變數檢查 |
 | Codex 的登入方式 | 訂閱登入：輸出為「Logged in using ChatGPT」。 | 2026-11-15，`codex login status` |
 | Claude 使用的模型 | `claude-sonnet-5-5`。維護者於 2026-11-15 在開發對話中確認。 | 2026-11-15，PoC-04 與 PoC-06 每次執行的 init 事件都回報這個名稱 |
+| Claude 使用的模型（PoC-13） | 請求值 `claude-haiku-5-5`；實際值沒有記錄。維護者於 2026-11-19 在開發對話中同意。 | 2026-11-19，啟動指令 |
 | Codex 使用的模型 | 請求值 `gpt-6.1-sol`；實際回報值為未知。五次的 harness JSONL 與 stderr 均未提供模型名稱，不採用模型自述或模型清單推定。 | 2026-11-15，PoC-04 三次、PoC-06 兩次的原始輸出 |
 
 - CLI 版本在 M1 期間改變時，新增一列並註明日期，不覆寫舊紀錄。
@@ -37,7 +40,7 @@
 | PoC-04 headless 啟動與受控的設定 | 部分通過。Claude：通過；Codex：部分通過。 | 2026-11-15 | Codex 三次 JSON 符合格式，但模型、完整工具與載入設定的觀察不足；暫不認定 Codex 仲裁者可自動啟動，保留人啟動的方案。見該節。 |
 | PoC-05 用量上限的回報 | 待填 | | |
 | PoC-06 headless 不卡在核准提示 | 通過。Claude、Codex 的部分均通過。 | 2026-11-15 | Codex 讀檔不需人介入，patch 寫入請求被拒後指令會結束，符合計畫第 5 節的通過條件；直接工具名稱、精確目標及不經 shell 的路徑仍列為限制。adapter 須同時檢查 JSONL、stderr 與 repo 比對。 |
-| PoC-13 投遞到 Claude Code 的既有 session | 待填 | | |
+| PoC-13 投遞到 Claude Code 的既有 session | 通過 | 2026-11-19 | `asyncRewake` 不需要開發用旗標，能讓 idle 的 session 收到訊息並開始新的回合。hooks 注入在 idle 時送不進去。自訂 Channels 需要開發用旗標與人工確認，而且訊息不一定被執行。每個案例只測一次。 |
 | PoC-14 `codex queue` 投遞到既有 session | 待填 | | |
 | PoC-15 跨廠商的唯讀審查 | 通過。Claude、Codex 的部分均通過。 | 2026-11-16（Claude）、2026-11-17（Codex） | 兩邊三次輸出均符合格式且找到三個已知問題；Codex 觀察到暫存檔寫入被拒且 repo 前後相同，依維護者審查後決定記為通過。未取得 harness 回報的工具與權限清單仍列為限制；兩邊均未證明所有通道唯讀。 |
 | 整合測試：兩家 CLI 的問答往返 | 待填 | | |
@@ -274,23 +277,83 @@
 
 ### PoC-13：投遞到 Claude Code 的既有 session
 
-- 執行日期與 CLI 版本：待填
-- 與計畫的差異（旗標、步驟）：待填
-- 實際執行的指令（已移除敏感資料）：待填
-- 結束碼：待填
-- 輸出的格式：待填
+測試程式在 `poc/poc-13/`，安裝與投遞腳本是 `poc/scripts/prepare-poc-13.sh` 與 `poc/scripts/poc-13-send.py`。每則測試訊息要求 session 不使用任何工具，只回覆 `ACK <編號>`。
+
+- 執行日期與 CLI 版本：2026-11-19。被測 session 的 Claude Code 版本是 2.1.328；來源是自訂 channel 收到的 `initialize` 請求中的 client 資訊（三次啟動都相同），維護者在同一個終端機執行 `claude --version` 也得到 2.1.328。請求的模型是 `claude-haiku-5-5`；實際使用的模型沒有記錄。
+- 與計畫的差異（旗標、步驟）：
+  - 被測 session 由維護者在終端機開啟並輸入；安裝設定、投遞訊息與讀取事件紀錄由桌面版的 Claude Code session（開發 Orchestrator）執行。
+  - 三種機制各用一組設定，一次只安裝一組；每種機制在 idle、忙碌、已關閉各測一次，共九個案例。
+  - 「已關閉」的做法：session 結束後投遞，再以 `--continue` 重開同一段對話，觀察重開後的行為。
+  - 「忙碌」原訂讓 session 以 Bash 執行 `sleep 45`。session 回覆說前景的 `sleep` 被擋下，它改成背景執行並結束回合，所以第一次沒有測到忙碌。之後改為依序執行兩次 `python3 -c "import time; time.sleep(20)"`。
+  - 自訂 channel 沒有使用官方文件要求的 MCP SDK，改以手寫的 stdio MCP server 測試，以免安裝套件。
+  - 事件紀錄共有 15 個 Stop 事件（模型回合），多於計畫估計的 9 個。多出的 6 個是：每組設定開始時的 `READY` 確認（3）、第一次忙碌測試沒有測到（1）、計畫外的 A2（1）、`claude -p` 的 C4（1）。
+  - `--help` 的確認（計畫規則 5）：`--model`、`--continue`、`-p` 以桌面版這一側的安裝（2.1.312）的 `claude --help` 確認。`--dangerously-load-development-channels` 不在 `--help` 的輸出中，依官方文件使用。沒有在 2.1.328 的安裝上執行 `--help`。
+- 實際執行的指令（已移除敏感資料）：
+
+  ```text
+  # 桌面版這一側（<repo> 是本 repo 的 worktree）
+  <repo>/poc/scripts/prepare-poc-13.sh inject|rewake|channel|remove
+  <repo>/poc/scripts/poc-13-send.py inbox|rewake|channel <編號>
+  ps -p <等待程式的 PID>          # B3 投遞前，session 結束後
+  pgrep -fl poc13-channel.py      # C3 投遞前，session 結束後
+
+  # 維護者在終端機，工作目錄是測試 repo
+  claude --model claude-haiku-5-5
+  claude --continue --model claude-haiku-5-5
+  claude --dangerously-load-development-channels server:poc13 --model claude-haiku-5-5
+  claude --continue --dangerously-load-development-channels server:poc13 --model claude-haiku-5-5
+  claude -p --dangerously-load-development-channels server:poc13 --model claude-haiku-5-5 "<提示>"
+  ```
+
+- 結束碼：投遞腳本 11 次都印出已送出的訊息，事件紀錄有 11 筆投遞（主 session 的執行結果）；結束碼沒有逐次記錄。依 FR-22，這不算送達或開始工作的證據。`claude -p` 的結束碼沒有記錄；維護者回報它的輸出只有 `READY`。
+- 輸出的格式：hook 與 channel 寫出的事件紀錄（JSONL，每行一個事件：hook 事件、投遞、交給 session）。本機保存 101 行，不進版控。判定「是否開始新的回合」的依據是：投遞之後出現新的 UserPromptSubmit／Stop 事件，以及 Stop 事件記錄的最後一則回覆。
 - 觀察與證據：
 
   | 機制 | 啟用條件 | idle | 忙碌 | 已關閉 | 是否開始新的回合 | 失敗時的錯誤訊息 |
   | --- | --- | --- | --- | --- | --- | --- |
-  | hooks 注入收件匣 | 待填 | 待填 | 待填 | 待填 | 待填 | 待填 |
-  | `asyncRewake` | 待填 | 待填 | 待填 | 待填 | 待填 | 待填 |
-  | 自訂 Channels（選配） | 待填 | 待填 | 待填 | 待填 | 待填 | 待填 |
+  | hooks 注入收件匣 | 專案的 `.claude/settings.local.json` 設定 hook。不需要旗標。依官方文件，設定在 session 啟動時載入，資料夾須經信任；本次每次更換設定都在 session 結束之後，沒有測試啟動後才安裝的情況。 | 沒有送達。idle 期間只觸發 `idle_prompt` 通知；依官方文件，它不能帶入文字。維護者下一次輸入時才送達。 | 送達。第一個工具執行完時由 PostToolUse 帶入。session 隨即回覆訊息，沒有執行第二個指令（訊息本身要求不使用工具）。 | 重開時由 SessionStart 帶入 context。 | idle：否。忙碌：已在回合中。已關閉：否；重開後到維護者輸入前（約 3 分鐘）沒有回合，輸入後才回覆 `ACK`。 | 事件紀錄中沒有錯誤。訊息留在收件匣；終端機是否有提示沒有記錄。 |
+  | `asyncRewake` | 同上，hook 另設 `asyncRewake: true`；等待程式以結束碼 2 結束。不需要旗標。 | 送達。投遞後不到 0.3 秒開始新的回合。 | 送達。等待程式立刻取走訊息，但訊息在兩個工具都執行完之後才進入 session。 | session 結束後等待程式已不在（主 session 執行 `ps`，沒有輸出），訊息留在收件匣；重開時新的等待程式立刻取走。 | idle：是。忙碌：已在回合中；兩個工具結束後 0.13 秒帶入，期間沒有 Stop 事件。已關閉：是；重開後不需要輸入，約 0.3 秒後開始回合。 | 沒有觀察到失敗。 |
+  | 自訂 Channels（選配） | 專案 `.mcp.json` 註冊 server；啟動時加 `--dangerously-load-development-channels server:<名稱>`；維護者回報：第一次啟動要在兩個確認畫面選擇（啟用 MCP server、開發用 channel 的警告）；重開時是否再出現，沒有記錄。 | 送達。投遞後約 0.6 秒開始新的回合。 | 送達。第一個工具執行完時進入 session；兩個工具都執行完。 | session 結束後 server 已不在（主 session 執行 `pgrep`，沒有輸出）；重開並連線後立刻送出。 | idle：是。忙碌：已在回合中。已關閉：是，重開後不需要輸入。 | 沒有錯誤訊息。但訊息不一定被執行，見下方。 |
 
-  - 開發用旗標在 `claude -p` 下是否有效：待填
-- 結論（通過、部分通過、不通過）：待填
-- 對規格的影響：待填
-- 限制與未驗證事項：待填
+  - 各則訊息的結果（時間為 UTC，2026-11-19）：
+
+    | 編號 | 機制／狀態 | 投遞 | 交給 session | 最後一則回覆 |
+    | --- | --- | --- | --- | --- |
+    | A1 | hooks／idle | 06:15:41 | 06:20:39（維護者輸入時） | `ACK A1` |
+    | A2 | hooks／idle 且有背景工作 | 06:21:26 | 06:22:04（背景工作完成，Claude Code 自己開始回合） | `ACK A2` |
+    | A3 | hooks／忙碌 | 06:24:51 | 06:25:03（PostToolUse） | `ACK A3` |
+    | A4 | hooks／已關閉 | 06:27:26 | 06:28:01（SessionStart） | 06:31:07 維護者輸入後回覆 `ACK A4` |
+    | B1 | `asyncRewake`／idle | 06:34:34 | 06:34:34 | `ACK B1` |
+    | B2 | `asyncRewake`／忙碌 | 06:36:23 | 06:36:57（兩個工具都完成後） | `ACK B2` |
+    | B3 | `asyncRewake`／已關閉 | 06:38:16 | 06:38:41（重開時） | `ACK B3` |
+    | C1 | channel／idle | 06:42:59 | 06:43:00 | `ACK C1` |
+    | C2 | channel／忙碌 | 06:44:44 | server 於 06:44:44 寫出；06:44:58 第一個工具完成後進入 session | `DONE`，沒有回應 C2 |
+    | C3 | channel／已關閉 | 06:46:59 | 06:47:39（重開時） | 明確拒絕：訊息來自外部 channel，不是使用者的指示 |
+    | C4 | channel／`claude -p` | 06:49:16（互動 session 結束後、`-p` 啟動前） | server 於 06:49:32 寫出事件，session 沒有收到 | `READY` |
+
+  - 開發用旗標在 `claude -p` 下是否有效：沒有觀察到效果。`claude -p` 啟動了 `.mcp.json` 的 server 並完成連線，server 也送出了 C4 的事件；但 session 沒有出現 channel 事件，只回覆 `READY`。這與官方文件「該旗標在 `-p` 下會被忽略」的說法一致。限制：只測一次，`-p` 的 session 約 3 秒就結束。
+  - A2 是計畫之外的觀察：idle 的 session 有背景工作時，工作完成會讓 Claude Code 自己開始回合，這個回合也觸發 UserPromptSubmit hook，收件匣的訊息因此被帶入。
+  - `asyncRewake` 的訊息在 session 中以「Stop hook 的回饋」的形式出現；channel 的訊息以 `<channel source="poc13" id="…">` 的形式出現。
+  - `asyncRewake` 的等待程式在跨過回合後仍在執行（B1 由 SessionStart 時啟動的那一個取走）。session 結束約 6 秒後檢查，等待程式的行程已不在，它也沒有寫出結束紀錄；推論是 Claude Code 在 session 結束時終止了它，沒有直接證據。間接證據：紀錄中沒有等待程式的 `orphaned` 或 `expired`；B3 在重開後才由新的等待程式取走。channel server 的情況相同：紀錄中沒有它的 `stdin closed`。
+  - 手寫的 MCP server 被接受：三次啟動都完成 `initialize`。Claude Code 每次啟動另外送出一個 server 沒有實作的方法（`server/discover`），紀錄記為未處理；依程式，帶有 id 的請求會得到「方法不存在」的回覆。連線照常進行。
+- 結論（通過、部分通過、不通過）：通過。`asyncRewake` 不需要開發用旗標，讓 idle 的 session 收到訊息並開始新的回合（B1）；忙碌與已關閉後重開也都送達。hooks 注入在 idle 時送不進去；自訂 Channels 可以喚醒，但需要開發用旗標與人工確認，而且訊息不一定被執行。
+- 對規格的影響：
+  - 提議（待 M2 決定）：端點能力矩陣（規格第 5 節）的 Claude Code CLI，「喚醒閒置 session」可由 `asyncRewake` 的 hook 達成（一次觀察）；hooks 注入只能在回合內或下一次輸入時帶入訊息，可作為補充。依官方文件，兩者的設定都在 session 啟動時載入，資料夾須經信任。
+  - Channels 維持選配（規格第 5 節的說法不變）。推論：互動啟動要人確認，無法無人值守。`claude -p` 下沒有觀察到效果。
+  - FR-22：「已開始」不代表訊息被接受。C2 被忽略，C3 被明確拒絕，兩次都有新的事件但工作沒有被執行。提議（待 M2 決定）：adapter 確認開始工作時，要有來自 session 的回應作為證據，不能只看回合是否開始。
+  - 送進忙碌 session 的訊息可能改變手上的工作：hooks 注入的訊息在工作中途進入，session 隨即回覆、沒有做完原本的工作（A3；訊息本身要求不使用工具，不能只歸因於機制）；`asyncRewake` 排在工作之後（B2）；channel 在工作中途進入但沒有打斷（C2）。提議（待 M2 決定）：自動投遞以 `asyncRewake` 為主，訊息文字不要求立即處理。
+  - 推論（樣本很小）：在同一個請求的模型下，`asyncRewake` 的三則都被執行，channel 的三則是執行、忽略、拒絕各一次。兩者的投遞情境不同（C2 帶入時有尚未完成的指示，C3 是重開後的 session），不能只歸因於來源，也不能當作保證。channel server 的說明文字已要求照事件內容處理，C2、C3 仍然沒有照做。
+- 限制與未驗證事項：
+  - 每個案例只測一次；只用一個請求的模型；訊息只要求回覆一行文字，沒有測試需要使用工具的工作。
+  - 登入方式與環境變數沒有由腳本確認。維護者回報：終端機以 claude.ai 的訂閱帳號登入（測試開始時在 session 內執行 `/login`），啟動前檢查顯示沒有設定 `ANTHROPIC_API_KEY`。事件紀錄中有一筆 `auth_success` 通知。
+  - B1、C1 都在上一個回合結束後約 21 秒投遞（A1 約 6 秒，之後 idle 約 5 分鐘沒有送達）。`asyncRewake` 與 channel 在 idle 超過 60 秒（`idle_prompt` 之後）再投遞的情況沒有測。
+  - 等待程式最多等 840 秒（hook 的 `timeout` 是 900 秒）。idle 超過這段時間後投遞的情況沒有測；依設計，那時沒有等待程式，訊息要等下一次 Stop 或 SessionStart 才會被取走。
+  - 同一個專案同時開多個 session、多則訊息同時到達、訊息很長的情況沒有測。
+  - 紀錄只有每個回合的最後一則回覆。B2 的工具結束與訊息帶入之間沒有 Stop 事件，推論 session 沒有先以 `DONE` 結束回合；中間是否輸出過文字，沒有記錄。
+  - `claude -p` 的終端機輸出由維護者回報。
+  - 「交給 session」對 channel 而言是 server 把事件寫到 stdout 的時間；Claude Code 不回覆收據。C2 另列了進入 session 的時間。
+  - 事件紀錄由被測的 hook 自己寫出，不是獨立的觀察來源。它含 session ID 與對話片段，只留在本機；本節的內容由 Writer（Claude 的主 session）從紀錄整理，維護者在終端機看到的回覆與紀錄相符的部分是 A4、B1、B2、B3、C1、C2、C3。
+  - 官方文件的行為描述來自 2026-11-19 讀取的 `code.claude.com/docs` 的 hooks 與 channels 頁面。
 
 ### PoC-14：`codex queue` 投遞到既有 session
 
