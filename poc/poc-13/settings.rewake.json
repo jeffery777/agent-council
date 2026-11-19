@@ -1,0 +1,84 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/.claude/hooks/poc13-hook.py\"; [ -f \"$f\" ] || exit 0; exec python3 \"$f\" log"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/.claude/hooks/poc13-hook.py\"; [ -f \"$f\" ] || exit 0; exec python3 \"$f\" wait",
+            "asyncRewake": true,
+            "timeout": 900
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/.claude/hooks/poc13-hook.py\"; [ -f \"$f\" ] || exit 0; exec python3 \"$f\" log"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/.claude/hooks/poc13-hook.py\"; [ -f \"$f\" ] || exit 0; exec python3 \"$f\" log"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/.claude/hooks/poc13-hook.py\"; [ -f \"$f\" ] || exit 0; exec python3 \"$f\" log"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/.claude/hooks/poc13-hook.py\"; [ -f \"$f\" ] || exit 0; exec python3 \"$f\" wait",
+            "asyncRewake": true,
+            "timeout": 900
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/.claude/hooks/poc13-hook.py\"; [ -f \"$f\" ] || exit 0; exec python3 \"$f\" log"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/.claude/hooks/poc13-hook.py\"; [ -f \"$f\" ] || exit 0; exec python3 \"$f\" log"
+          }
+        ]
+      }
+    ]
+  }
+}

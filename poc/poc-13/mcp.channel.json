@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "poc13": {
+      "command": "python3",
+      "args": [
+        ".claude/hooks/poc13-channel.py"
+      ]
+    }
+  }
+}
